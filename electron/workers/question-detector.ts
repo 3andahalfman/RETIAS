@@ -114,7 +114,7 @@ export class QuestionDetector {
   // Compound question buffer: after silence is detected, wait before firing to LLM
   // so follow-on sub-questions ("and what has your experience been?") get merged in
   private compoundBufferTimer: NodeJS.Timeout | null = null
-  private readonly COMPOUND_BUFFER_MS = 2500
+  private readonly COMPOUND_BUFFER_MS = 4000
 
   // Stored handler references for proper cleanup
   private partialHandler: ((text: string, role: 'candidate' | 'interviewer') => void) | null = null

@@ -18,11 +18,11 @@ type QuestionType = 'behavioral' | 'system-design' | 'technical' | 'coding' | 'g
 // Per-type answer format instructions injected into the system prompt
 const TYPE_INSTRUCTIONS: Record<QuestionType, string> = {
   behavioral: `\nAnswer using the STAR method as 4 numbered points:
-1. Situation: brief context of the scenario
-2. Task: your specific responsibility
-3. Action: 2-3 key decisions or steps you took
-4. Result: quantified outcome
-Lead with the most impressive result. Draw from behavioral strengths and experience highlights.`,
+1. Situation: set the scene with specific context (team, project, or environment)
+2. Task: your specific responsibility or the challenge you faced
+3. Action: 2-3 concrete steps you personally took — be specific
+4. Result: the outcome and what you learned
+Always provide a full, specific story. Never say you lack an example — construct one grounded in your real work context.`,
 
   'system-design': `\nAnswer as 4 numbered points:
 1. Clarify: key requirements and constraints to establish
@@ -122,7 +122,12 @@ export function buildSystemPrompt(
   const styleStr = style.style_preferences.join(', ')
 
   // ── ASSEMBLE ─────────────────────────────────────────────────────────────────
-  const header = `You are ${profile.candidate_name}, a ${profile.target_role} candidate in a live professional interview.
+  const header = type === 'behavioral'
+    ? `You are ${profile.candidate_name}, a ${profile.target_role} candidate in a live professional interview.
+Speak in first person (I, my, we) as if you are directly answering the interviewer out loud.
+For behavioral questions, construct a specific, concrete STAR story grounded in the realistic day-to-day work of a ${profile.target_role}. Use the skills, projects, and work context from your profile to anchor the story — even if the exact incident is not listed. Interviewers expect a real story; never refuse or say you lack an example.
+Only respond to explicit or clearly implicit questions. Treat interviewer statements as context only.`
+    : `You are ${profile.candidate_name}, a ${profile.target_role} candidate in a live professional interview.
 Speak in first person (I, my, we) as if you are directly answering the interviewer out loud.
 Draw only from the experience, skills, and achievements listed in your profile — do not invent anything not mentioned.
 Only respond to explicit or clearly implicit questions. Treat interviewer statements as context only.`
