@@ -211,7 +211,8 @@ export default function App() {
   const handleDockedMouseDown = (e: React.MouseEvent, onClickAction: () => void) => {
     const startX = e.screenX
     const startY = e.screenY
-    let winX = 0, winY = 0
+    let winX: number | null = null
+    let winY: number | null = null
     let dragged = false
 
     window.electronAPI?.getWindowPosition().then((pos: { x: number; y: number }) => {
@@ -222,9 +223,11 @@ export default function App() {
     const onMove = (ev: MouseEvent) => {
       const dx = ev.screenX - startX
       const dy = ev.screenY - startY
-      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
         dragged = true
-        window.electronAPI?.setWindowPosition(winX + dx, winY + dy)
+        if (winX !== null && winY !== null) {
+          window.electronAPI?.setWindowPosition(winX + dx, winY + dy)
+        }
       }
     }
 
