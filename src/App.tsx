@@ -133,10 +133,10 @@ export default function App() {
   if (isDocked && (view === 'setup' || view === 'dashboard' || view === 'mock-interview')) {
     return (
       <div className="app-root docked">
-        <div className="docked-content" onMouseDown={(e) => handleDockedMouseDown(e, () => {
+        <div className="docked-content" onClick={() => {
           setIsDocked(false)
           window.electronAPI?.undockWindow()
-        })}>
+        }}>
           <img className="docked-logo" src="./logo.svg" alt="Logo" title="Click to expand" />
         </div>
       </div>
@@ -208,45 +208,12 @@ export default function App() {
     else window.electronAPI?.undockWindow()
   }
 
-  const handleDockedMouseDown = (e: React.MouseEvent, onClickAction: () => void) => {
-    const startX = e.screenX
-    const startY = e.screenY
-    let winX: number | null = null
-    let winY: number | null = null
-    let dragged = false
-
-    window.electronAPI?.getWindowPosition().then((pos: { x: number; y: number }) => {
-      winX = pos.x
-      winY = pos.y
-    })
-
-    const onMove = (ev: MouseEvent) => {
-      const dx = ev.screenX - startX
-      const dy = ev.screenY - startY
-      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
-        dragged = true
-        if (winX !== null && winY !== null) {
-          window.electronAPI?.setWindowPosition(winX + dx, winY + dy)
-        }
-      }
-    }
-
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-      if (!dragged) onClickAction()
-    }
-
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-  }
-
   return (
     <div className={`app-root ${isDocked ? 'docked' : ''}`}>
       <AudioCapture active={isStarted && sessionActive && micActive} />
 
       {isDocked && (
-        <div className="docked-content" onMouseDown={(e) => handleDockedMouseDown(e, toggleDock)}>
+        <div className="docked-content" onClick={toggleDock}>
           <img className="docked-logo" src="./logo.svg" alt="Logo" />
           <div className={`docked-bars ${isStarted && sessionActive && micActive ? 'active' : ''}`}>
             <span /><span /><span />

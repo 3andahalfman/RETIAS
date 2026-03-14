@@ -1541,12 +1541,9 @@ html, body, #root {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  cursor: grab;
+  cursor: pointer;
   gap: 4px;
   transition: background 0.15s;
-}
-.docked-content:active {
-  cursor: grabbing;
 }
 
 .docked-content:hover {
