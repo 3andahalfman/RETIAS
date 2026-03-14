@@ -1,0 +1,10 @@
+node_modules/
+dist/
+release/
+.env
+*.db
+*.log
+.DS_Store
+Thumbs.db
+retias-cert.pfx
+.claude/

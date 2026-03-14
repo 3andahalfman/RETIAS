@@ -1,0 +1,99 @@
+{
+  "name": "retias",
+  "version": "1.3.0",
+  "description": "Real Time Interview Assistant Software — AI-powered real-time coaching",
+  "main": "dist/electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
+    "dev:vite": "vite",
+    "dev:electron": "tsc -p tsconfig.electron.json && npx wait-on http://localhost:5173 -t 30000 && env -u ELECTRON_RUN_AS_NODE NODE_ENV=development node_modules/.bin/electron .",
+    "build": "vite build && tsc -p tsconfig.electron.json",
+    "package": "npm run build && electron-builder",
+    "package:win": "npm run build && electron-builder --win",
+    "publish:win": "npm run build && node -r dotenv/config node_modules/.bin/electron-builder --win --publish always",
+    "package:mac": "npm run build && electron-builder --mac"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.3",
+    "@deepgram/sdk": "^3.13.0",
+    "@ricky0123/vad-web": "^0.0.19",
+    "@types/sql.js": "^1.4.9",
+    "dotenv": "^16.6.1",
+    "electron-updater": "^6.8.3",
+    "mammoth": "^1.12.0",
+    "naudiodon": "^2.3.6",
+    "pdf-parse": "^1.1.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-markdown": "^10.1.0",
+    "sql.js": "^1.14.1"
+  },
+  "build": {
+    "appId": "com.retias.app",
+    "productName": "RETIAS",
+    "files": [
+      "dist/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".env",
+        "to": ".env"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/logo.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "directories": {
+      "output": "release"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "3andahalfman",
+        "repo": "RETIAS"
+      }
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/naudiodon/**",
+      "node_modules/sql.js/dist/sql-wasm.wasm",
+      "node_modules/pdf-parse/**",
+      "node_modules/mammoth/**"
+    ]
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.19.37",
+    "@types/react": "^18.3.28",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "autoprefixer": "^10.4.27",
+    "concurrently": "^8.2.2",
+    "cross-env": "^10.1.0",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21",
+    "wait-on": "^9.0.4"
+  }
+}
