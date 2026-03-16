@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface DashboardMetrics {
   totalSessions: number
@@ -33,22 +33,6 @@ export default function Dashboard({ onNewSession, onPastSessions, onMockIntervie
   const [cvError, setCvError] = useState('')
   const cvFileInputRef = useRef<HTMLInputElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
-
-  const fitWindow = useCallback(() => {
-    const el = rootRef.current
-    if (!el) return
-    const h = Math.min(Math.max(el.scrollHeight + 4, 420), 700)
-    window.electronAPI?.resizeWindow(600, h, false)
-  }, [])
-
-
-  // Fit window to content whenever data changes
-  useEffect(() => {
-    fitWindow()
-    const observer = new ResizeObserver(fitWindow)
-    if (rootRef.current) observer.observe(rootRef.current)
-    return () => observer.disconnect()
-  }, [metrics, cvs, fitWindow])
 
   useEffect(() => {
     window.electronAPI?.getDashboardMetrics().then((m) => setMetrics(m ?? null))
@@ -290,7 +274,7 @@ export default function Dashboard({ onNewSession, onPastSessions, onMockIntervie
 
       <div className="dash-footer">
         <span className="dash-footer-text">RETIAS — Real Time Interview Assistant Software</span>
-        <span className="dash-footer-version">v1.4.0</span>
+        <span className="dash-footer-version">v1.4.1</span>
       </div>
     </div>
   )

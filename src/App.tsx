@@ -85,11 +85,7 @@ export default function App() {
 
   // Handle window resizing when view changes
   useEffect(() => {
-    if (view === 'session') {
-      window.electronAPI?.resizeWindow(1100, 750, true)
-    } else if (view === 'past-sessions') {
-      window.electronAPI?.resizeWindow(860, 660, false)
-    }
+    window.electronAPI?.resizeWindow(1100, 750, view === 'session')
   }, [view])
 
   const handleLogin = (u: User) => {

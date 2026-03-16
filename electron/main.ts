@@ -453,7 +453,7 @@ async function bootstrap() {
   })
 
   // Window control IPC
-  let preDockBounds = { width: 900, height: 520, x: 0, y: 0 }
+  let preDockBounds = { width: 1100, height: 750, x: 0, y: 0 }
   ipcMain.on('window:dock', () => {
     if (overlayWindow) {
       preDockBounds = overlayWindow.getBounds()

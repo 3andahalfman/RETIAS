@@ -6,8 +6,8 @@ const isDev = process.env.NODE_ENV === 'development'
 export function createOverlayWindow(): BrowserWindow {
   const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize
 
-  const winW = 900
-  const winH = 520
+  const winW = 1100
+  const winH = 750
 
   const overlay = new BrowserWindow({
     width: winW,

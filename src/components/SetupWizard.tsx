@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 
 const DEFAULT_EXTRA_CONTEXT = `Do not use generic AI buzzwords or filler phrases. Avoid words like: innovative, cutting-edge, robust, scalable, seamless, dynamic, synergy, transformative, optimized, disruptive, agile, empowering, streamlined, next-generation, impactful. Avoid phrases like: leveraging technology, driving innovation, delivering value, data-driven insights, future-ready, mission-critical, customer-centric, scalable architecture, proven track record, results-oriented, passionate professional, strong team player, go-getter attitude. Use plain, specific, direct language instead.`
 
@@ -59,24 +59,6 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [] 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
 
-  // Keep body opaque while setup wizard is mounted (Electron window is transparent by default)
-  useEffect(() => {
-    document.body.style.background = '#09090b'
-    return () => { document.body.style.background = '' }
-  }, [])
-
-  useEffect(() => {
-    if (!window.electronAPI?.resizeWindow) return
-    const el = rootRef.current
-    if (!el) return
-    const doResize = () => {
-      window.electronAPI?.resizeWindow(600, el.offsetHeight + 4, true)
-    }
-    doResize()
-    const observer = new ResizeObserver(doResize)
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [step])
 
   const handleCreate = () => {
     // Fire-and-forget: pre-warm the context extraction cache so first answer is fast

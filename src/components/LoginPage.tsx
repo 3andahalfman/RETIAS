@@ -21,11 +21,6 @@ export default function LoginPage({ onLogin }: Props) {
     window.electronAPI?.authGoogleAvailable?.().then(setGoogleAvailable).catch(() => {})
   }, [])
 
-  // Resize window to fit content for each tab
-  useEffect(() => {
-    const height = tab === 'register' ? 600 : 520
-    window.electronAPI?.resizeWindow(440, height, false)
-  }, [tab])
 
   const clearError = () => setError('')
 

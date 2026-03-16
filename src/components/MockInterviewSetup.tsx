@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { SessionConfig } from './SetupWizard'
 
 interface Props {
@@ -17,15 +17,6 @@ export default function MockInterviewSetup({ onCreateSession, onBack, onDock, cv
   const [error, setError] = useState('')
   const [showSnapGrid, setShowSnapGrid] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    document.body.style.background = '#09090b'
-    return () => { document.body.style.background = '' }
-  }, [])
-
-  useEffect(() => {
-    window.electronAPI?.resizeWindow(640, 720, true)
-  }, [])
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
