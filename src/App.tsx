@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+// panelSplit driven via panelsRef.current.style.setProperty('--panel-split', ...) for linter compliance
 import Dashboard from './components/Dashboard'
 import LoginPage from './components/LoginPage'
 import SetupWizard, { SessionConfig } from './components/SetupWizard'
@@ -29,6 +30,26 @@ export default function App() {
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null)
   const [convState, setConvState] = useState<string>('IDLE')
   const [isDocked, setIsDocked] = useState(false)
+  const isDraggingRef = useRef(false)
+  const panelsRef = useRef<HTMLDivElement>(null)
+
+  const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    isDraggingRef.current = true
+    const onMove = (moveEvent: MouseEvent) => {
+      if (!isDraggingRef.current || !panelsRef.current) return
+      const rect = panelsRef.current.getBoundingClientRect()
+      const pct = Math.min(60, Math.max(20, ((moveEvent.clientX - rect.left) / rect.width) * 100))
+      panelsRef.current.style.setProperty('--panel-split', `${Math.round(pct)}%`)
+    }
+    const onUp = () => {
+      isDraggingRef.current = false
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [])
 
   // Restore session on app start
   useEffect(() => {
@@ -232,11 +253,12 @@ export default function App() {
           isDocked={isDocked}
           onToggleDock={toggleDock}
           convState={convState}
+          isPremium={user?.is_premium ?? false}
         />
 
-        <div className="panels">
+        <div className="panels" ref={panelsRef}>
           <TranscriptPanel />
-          <div className="panel-divider" />
+          <div className="panel-divider" onMouseDown={handleDividerMouseDown} />
           <AnswerPanel />
         </div>
       </div>

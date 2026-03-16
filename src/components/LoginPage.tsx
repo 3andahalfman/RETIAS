@@ -15,11 +15,10 @@ export default function LoginPage({ onLogin }: Props) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleAvailable, setGoogleAvailable] = useState(false)
+  const [snapOpen, setSnapOpen] = useState(false)
 
   useEffect(() => {
-    document.body.style.background = '#09090b'
     window.electronAPI?.authGoogleAvailable?.().then(setGoogleAvailable).catch(() => {})
-    return () => { document.body.style.background = '' }
   }, [])
 
   // Resize window to fit content for each tab
@@ -82,6 +81,29 @@ export default function LoginPage({ onLogin }: Props) {
 
   return (
     <div className="login-root">
+      {/* Window controls */}
+      <div className="login-win-controls">
+        <div className="login-snap-wrapper">
+          <button type="button" className="login-win-btn" title="Snap layout" onClick={() => setSnapOpen(!snapOpen)}>✥</button>
+          {snapOpen && (
+            <div className="snap-grid-dropdown">
+              <div className="snap-grid-row">
+                <button type="button" className="snap-grid-cell" title="Top Left"    onClick={() => { window.electronAPI?.snapWindow('tl'); setSnapOpen(false) }} />
+                <button type="button" className="snap-grid-cell" title="Top Middle"  onClick={() => { window.electronAPI?.snapWindow('tm'); setSnapOpen(false) }} />
+                <button type="button" className="snap-grid-cell" title="Top Right"   onClick={() => { window.electronAPI?.snapWindow('tr'); setSnapOpen(false) }} />
+              </div>
+              <div className="snap-grid-row">
+                <button type="button" className="snap-grid-cell" title="Bottom Left"   onClick={() => { window.electronAPI?.snapWindow('bl'); setSnapOpen(false) }} />
+                <button type="button" className="snap-grid-cell" title="Bottom Middle" onClick={() => { window.electronAPI?.snapWindow('bm'); setSnapOpen(false) }} />
+                <button type="button" className="snap-grid-cell" title="Bottom Right"  onClick={() => { window.electronAPI?.snapWindow('br'); setSnapOpen(false) }} />
+              </div>
+            </div>
+          )}
+        </div>
+        <button type="button" className="login-win-btn" title="Minimise to dock" onClick={() => window.electronAPI?.dockWindow()}>↙</button>
+        <button type="button" className="login-win-btn close" title="Close" onClick={() => window.electronAPI?.closeWindow()}>✕</button>
+      </div>
+
       <div className="login-card">
         {/* Logo + Brand */}
         <div className="login-logo-area">

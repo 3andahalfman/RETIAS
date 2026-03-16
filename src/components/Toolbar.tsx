@@ -15,6 +15,7 @@ interface ToolbarProps {
   isDocked: boolean
   onToggleDock: () => void
   convState?: string
+  isPremium?: boolean
 }
 
 export default function Toolbar({
@@ -26,11 +27,13 @@ export default function Toolbar({
   onToggleMic,
   isDocked,
   onToggleDock,
-  convState = 'IDLE'
+  convState = 'IDLE',
+  isPremium = false,
 }: ToolbarProps) {
   const [elapsed, setElapsed] = useState(0)
   const [menuOpen, setMenuOpen] = useState(false)
   const [snapOpen, setSnapOpen] = useState(false)
+  const [analysing, setAnalysing] = useState(false)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -71,6 +74,16 @@ export default function Toolbar({
     if (menuOpen) document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [menuOpen])
+
+  const handleAnalyseScreen = async () => {
+    if (analysing) return
+    setAnalysing(true)
+    try {
+      await window.electronAPI?.analyseScreen()
+    } finally {
+      setAnalysing(false)
+    }
+  }
 
   const minutes = Math.floor(elapsed / 60)
   const seconds = elapsed % 60
@@ -140,6 +153,18 @@ export default function Toolbar({
             <span className="timer-dot" />
             {timeStr}
           </div>
+        )}
+
+        {isStarted && sessionActive && (
+          <button
+            type="button"
+            className={`toolbar-action-btn analyse-screen-btn${analysing ? ' loading' : ''}${!isPremium ? ' locked' : ''}`}
+            title={isPremium ? 'Analyse Screen — capture screen and get AI solution' : '🔒 Premium feature — upgrade to unlock'}
+            onClick={isPremium ? handleAnalyseScreen : undefined}
+            disabled={analysing || !isPremium}
+          >
+            {analysing ? '⏳' : <>{!isPremium && <span className="analyse-lock">🔒</span>}🖥 Analyse</>}
+          </button>
         )}
 
         {/* End session / menu */}

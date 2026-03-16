@@ -16,6 +16,7 @@ const isDev = process.env.NODE_ENV === 'development'
 let overlayWindow: BrowserWindow | null = null
 let ipcBus: IpcBus
 let currentUserId: string | null = null
+let currentUserIsPremium = false
 
 // Cached screen source — fetched before content protection is enabled so the
 // setDisplayMediaRequestHandler always has a valid video source for the WASAPI
@@ -145,6 +146,19 @@ async function bootstrap() {
     return sources.map(s => ({ id: s.id, name: s.name }))
   })
 
+  ipcMain.handle('screen:analyse', async () => {
+    if (!currentUserIsPremium) throw new Error('Screen Analysis is a premium feature. Upgrade your account to use it.')
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 1920, height: 1080 },
+    })
+    const source = sources[0]
+    if (!source) throw new Error('No screen source found')
+    const png = source.thumbnail.toPNG()
+    const base64 = Buffer.from(png).toString('base64')
+    ipcBus.emit('screen:analyse', base64)
+  })
+
   ipcMain.on('session:start', (_event, config) => {
     // Refresh screen source cache at session start in case displays changed since startup
     desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
@@ -192,6 +206,7 @@ async function bootstrap() {
     const { createUser } = await import('./lib/auth-store.js')
     const user = await createUser(email, password, displayName)
     currentUserId = user.id
+    currentUserIsPremium = user.is_premium
     return user
   })
 
@@ -199,6 +214,7 @@ async function bootstrap() {
     const { loginUser } = await import('./lib/auth-store.js')
     const user = await loginUser(email, password)
     currentUserId = user.id
+    currentUserIsPremium = user.is_premium
     return user
   })
 
@@ -215,6 +231,7 @@ async function bootstrap() {
     const info = await startGoogleOAuth()
     const user = await findOrCreateGoogleUser(info.googleId, info.email, info.name)
     currentUserId = user.id
+    currentUserIsPremium = user.is_premium
     return user
   })
 
@@ -223,12 +240,16 @@ async function bootstrap() {
     const user = await getUserById(userId)
     if (user) {
       currentUserId = user.id
+      currentUserIsPremium = user.is_premium
     }
     return user
   })
 
-  ipcMain.on('auth:logout', () => {
+  ipcMain.on('auth:logout', async () => {
     currentUserId = null
+    currentUserIsPremium = false
+    const { authLogout } = await import('./lib/auth-store.js')
+    await authLogout().catch(() => {})
   })
 
   // ── CV handlers ────────────────────────────────────────────────────────────

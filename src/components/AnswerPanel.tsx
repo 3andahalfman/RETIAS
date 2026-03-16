@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
 
 interface AnswerEntry {
   question: string
@@ -126,12 +129,20 @@ export default function AnswerPanel() {
     return next
   })
 
+  const [copied, setCopied] = useState(false)
   const hasNewerAnswer = current && !current.generating && currentIdx < answers.length - 1
   const canRefresh = answers.length > 0 && !answers[answers.length - 1].generating
 
+  const handleCopyWithToast = () => {
+    handleCopy()
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
   return (
     <div className="answer-panel" data-font-size={fontSizeIdx}>
-      <div className="panel-subheader">
+      {/* Row 1 — navigation */}
+      <div className="answer-nav-row">
         <div className="answer-nav">
           <button type="button" className="panel-action-btn" onClick={handlePrev} disabled={currentIdx <= 0} title="Previous answer">‹</button>
           <span className="answer-nav-label">
@@ -139,14 +150,20 @@ export default function AnswerPanel() {
           </span>
           <button type="button" className="panel-action-btn" onClick={handleNext} disabled={currentIdx >= answers.length - 1} title="Next answer">›</button>
         </div>
+        {hasNewerAnswer && (
+          <button type="button" className="panel-action-btn new-answer-hint" onClick={() => setCurrentIdx(answers.length - 1)} title="Jump to latest answer">↓ New</button>
+        )}
+      </div>
+      {/* Row 2 — actions */}
+      <div className="answer-actions-row">
         <div className="panel-actions">
-          {hasNewerAnswer && (
-            <button type="button" className="panel-action-btn new-answer-hint" onClick={() => setCurrentIdx(answers.length - 1)} title="Jump to latest answer">↓ New</button>
-          )}
           <button type="button" className="panel-action-btn" onClick={handleFontDecrease} title="Decrease text size" disabled={fontSizeIdx === 0}>A-</button>
           <button type="button" className="panel-action-btn" onClick={handleFontIncrease} title="Increase text size" disabled={fontSizeIdx === FONT_SIZES.length - 1}>A+</button>
+          <span className="panel-action-divider" />
+          <button type="button" className="panel-action-btn copy-btn" onClick={handleCopyWithToast} title="Copy answer" disabled={!current?.answer}>
+            {copied ? <span className="copy-toast">✓ Copied!</span> : '📋'}
+          </button>
           <button type="button" className="panel-action-btn" onClick={handleRefresh} title="Regenerate last answer" disabled={!canRefresh}>↺</button>
-          <button type="button" className="panel-action-btn" onClick={handleCopy} title="Copy answer" disabled={!current?.answer}>📋</button>
           <button type="button" className="panel-action-btn" onClick={handleDelete} title="Delete answer" disabled={!current}>🗑</button>
         </div>
       </div>
@@ -166,7 +183,7 @@ export default function AnswerPanel() {
               <div className="answer-body">
                 <div className="answer-label"><span>⭐</span> Answer</div>
                 <div className="answer-text">
-                  <ReactMarkdown>{current.answer}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{current.answer}</ReactMarkdown>
                   {current.generating && <span className="answer-cursor">▌</span>}
                 </div>
               </div>

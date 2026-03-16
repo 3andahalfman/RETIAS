@@ -1,5 +1,4 @@
-import crypto from 'crypto'
-import { getDb, persist } from './cache.js'
+import { supabase } from './supabase.js'
 
 export interface CV {
   id: string
@@ -9,42 +8,46 @@ export interface CV {
   created_at: number
 }
 
-function generateId(): string {
-  return crypto.randomBytes(16).toString('hex')
-}
-
 export async function saveCV(userId: string, name: string, content: string): Promise<CV> {
-  const db = await getDb()
-  const id = generateId()
-  const now = Date.now()
+  const { data, error } = await supabase
+    .from('cvs')
+    .insert({ user_id: userId, name: name.trim(), content })
+    .select()
+    .single()
 
-  db.run(
-    `INSERT INTO cvs (id, user_id, name, content, created_at) VALUES (?, ?, ?, ?, ?)`,
-    [id, userId, name.trim(), content, now]
-  )
-  persist(db)
-
-  return { id, user_id: userId, name: name.trim(), content, created_at: now }
+  if (error) throw new Error(error.message)
+  return {
+    id: data.id,
+    user_id: data.user_id,
+    name: data.name,
+    content: data.content,
+    created_at: new Date(data.created_at).getTime(),
+  }
 }
 
 export async function listCVs(userId: string): Promise<CV[]> {
-  const db = await getDb()
-  const result = db.exec(
-    `SELECT id, user_id, name, content, created_at FROM cvs WHERE user_id = ? ORDER BY created_at DESC`,
-    [userId]
-  )
-  if (!result[0]) return []
-  return result[0].values.map((row) => ({
-    id: row[0] as string,
-    user_id: row[1] as string,
-    name: row[2] as string,
-    content: row[3] as string,
-    created_at: row[4] as number,
+  const { data, error } = await supabase
+    .from('cvs')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(error.message)
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    user_id: row.user_id,
+    name: row.name,
+    content: row.content,
+    created_at: new Date(row.created_at).getTime(),
   }))
 }
 
 export async function deleteCV(userId: string, cvId: string): Promise<void> {
-  const db = await getDb()
-  db.run(`DELETE FROM cvs WHERE id = ? AND user_id = ?`, [cvId, userId])
-  persist(db)
+  const { error } = await supabase
+    .from('cvs')
+    .delete()
+    .eq('id', cvId)
+    .eq('user_id', userId)
+
+  if (error) throw new Error(error.message)
 }

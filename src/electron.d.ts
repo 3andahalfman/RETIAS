@@ -67,6 +67,7 @@ interface User {
   display_name: string
   google_id: string | null
   created_at: number
+  is_premium: boolean
 }
 
 interface CV {
@@ -82,6 +83,7 @@ interface ElectronAPI {
   stopSession: () => void
   getAudioDevices: () => Promise<any[]>
   getDesktopSources: () => Promise<Array<{ id: string; name: string }>>
+  analyseScreen: () => Promise<void>
   sendAudioChunk: (buffer: ArrayBuffer, sampleRate: number, source: 'mic' | 'system') => void
 
   // Answer streaming
@@ -154,6 +156,7 @@ declare global {
     display_name: string
     google_id: string | null
     created_at: number
+    is_premium: boolean
   }
   interface CV {
     id: string

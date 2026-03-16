@@ -57,6 +57,7 @@ export class LLMWorker {
 
     this.ipcBus.on('context:ready', this.contextHandler)
     this.ipcBus.on('overlay:regenerate', this.regenerateHandler)
+    this.ipcBus.on('screen:analyse', (base64Image: string) => this.analyseScreen(base64Image))
   }
 
   /** Abort the active stream if one is running, returns true if aborted */
@@ -135,6 +136,74 @@ export class LLMWorker {
       console.error(`[LLMWorker] Claude error ${status} ${errType}: ${message}`)
       this.ipcBus.emit('llm:token', `\n\n⚠️ Error generating answer (${status}: ${errType || message})`)
       this.ipcBus.emit('llm:done')
+    } finally {
+      this.currentStream = null
+      this.isGenerating = false
+    }
+  }
+
+  private async analyseScreen(base64Image: string) {
+    if (this.isGenerating) this.abortCurrent()
+
+    const questionText = 'Screen Analysis'
+    const questionType = 'general'
+
+    this.ipcBus.emit('question:detected', questionText, questionType, '')
+
+    this.isGenerating = true
+    let fullResponse = ''
+
+    try {
+      console.log('[LLMWorker] Analysing screen with vision...')
+      const stream = this.client.messages.stream({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2048,
+        system: `You are an expert technical assistant. Analyse the screen and solve every question shown.
+
+FORMAT RULES (follow exactly):
+- Never open with pleasantries or clarifying questions. Go straight to the solution.
+- Structure every answer: working/explanation first → final answer clearly labelled at the end.
+- For maths or science: show every step, define all variables, state the formula used, then state the final answer on its own line prefixed with "**Answer:**".
+- For coding: explain the approach briefly, then provide clean commented code.
+- For multiple-choice: state the correct option letter and answer, then explain why in 2–3 sentences.
+- For written/case study: give a structured response with clear headings.
+- Use LaTeX for all mathematical expressions — inline with $...$ and block equations with $$...$$
+- Do not use raw ASCII fractions like EI/ρ; use proper LaTeX like $$\\frac{EI}{\\rho}$$ instead.
+
+Be thorough and precise. Solve every question visible on the screen.`,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: 'image/png', data: base64Image },
+            },
+            { type: 'text', text: 'Solve all questions shown on this screen.' },
+          ],
+        }],
+      })
+      this.currentStream = stream
+
+      for await (const event of stream) {
+        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+          const token = event.delta.text
+          fullResponse += token
+          this.ipcBus.emit('llm:token', token)
+        }
+      }
+
+      this.ipcBus.emit('llm:done')
+
+      if (fullResponse) {
+        await this.cache.set(questionText + '_screen_' + Date.now(), questionType, fullResponse)
+      }
+    } catch (err: any) {
+      const isAbort = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort')
+      if (!isAbort) {
+        console.error('[LLMWorker] Screen analysis error:', err?.message)
+        this.ipcBus.emit('llm:token', '\n\n⚠️ Screen analysis failed. Please try again.')
+        this.ipcBus.emit('llm:done')
+      }
     } finally {
       this.currentStream = null
       this.isGenerating = false

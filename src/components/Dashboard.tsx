@@ -41,10 +41,6 @@ export default function Dashboard({ onNewSession, onPastSessions, onMockIntervie
     window.electronAPI?.resizeWindow(600, h, false)
   }, [])
 
-  useEffect(() => {
-    document.body.style.background = '#09090b'
-    return () => { document.body.style.background = '' }
-  }, [])
 
   // Fit window to content whenever data changes
   useEffect(() => {
@@ -137,6 +133,7 @@ export default function Dashboard({ onNewSession, onPastSessions, onMockIntervie
           <span className="dash-user-info" title={user.email}>
             {user.display_name || user.email}
           </span>
+          {user.is_premium && <span className="dash-premium-badge">✨ PRO</span>}
         </div>
         <div className="setup-topbar-right">
           <div className="snap-btn-wrapper">
@@ -293,7 +290,7 @@ export default function Dashboard({ onNewSession, onPastSessions, onMockIntervie
 
       <div className="dash-footer">
         <span className="dash-footer-text">RETIAS — Real Time Interview Assistant Software</span>
-        <span className="dash-footer-version">v1.3.4</span>
+        <span className="dash-footer-version">v1.4.0</span>
       </div>
     </div>
   )

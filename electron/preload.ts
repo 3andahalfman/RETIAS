@@ -9,18 +9,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Audio
   getAudioDevices: () => ipcRenderer.invoke('get-audio-devices'),
   getDesktopSources: () => ipcRenderer.invoke('get-desktop-sources'),
+  analyseScreen: () => ipcRenderer.invoke('screen:analyse'),
   sendAudioChunk: (buffer: ArrayBuffer, sampleRate: number, source: 'mic' | 'system') =>
     ipcRenderer.send('audio:chunk', buffer, sampleRate, source),
 
   // Answer events from LLM
-  onToken: (cb: (token: string) => void) =>
-    ipcRenderer.on('llm:token', (_e, token) => cb(token)),
-  onAnswerDone: (cb: () => void) =>
-    ipcRenderer.on('llm:done', () => cb()),
-  onQuestionDetected: (cb: (question: string, type: string) => void) =>
-    ipcRenderer.on('question:detected', (_e, question, type) => cb(question, type)),
-  onQuestionUpdate: (cb: (question: string, type: string) => void) =>
-    ipcRenderer.on('question:update', (_e, question, type) => cb(question, type)),
+  // removeAllListeners guard prevents duplicate tokens if the component re-registers
+  onToken: (cb: (token: string) => void) => {
+    ipcRenderer.removeAllListeners('llm:token')
+    ipcRenderer.on('llm:token', (_e, token) => cb(token))
+  },
+  onAnswerDone: (cb: () => void) => {
+    ipcRenderer.removeAllListeners('llm:done')
+    ipcRenderer.on('llm:done', () => cb())
+  },
+  onQuestionDetected: (cb: (question: string, type: string) => void) => {
+    ipcRenderer.removeAllListeners('question:detected')
+    ipcRenderer.on('question:detected', (_e, question, type) => cb(question, type))
+  },
+  onQuestionUpdate: (cb: (question: string, type: string) => void) => {
+    ipcRenderer.removeAllListeners('question:update')
+    ipcRenderer.on('question:update', (_e, question, type) => cb(question, type))
+  },
   onConvState: (cb: (state: string) => void) =>
     ipcRenderer.on('conv:state', (_e, state) => cb(state)),
 

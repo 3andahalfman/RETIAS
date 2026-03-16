@@ -1,5 +1,5 @@
-import crypto from 'crypto'
-import { getDb, persist } from './cache.js'
+import { supabase } from './supabase.js'
+import type { User as SupabaseUser } from '@supabase/supabase-js'
 
 export interface User {
   id: string
@@ -7,14 +7,25 @@ export interface User {
   display_name: string
   google_id: string | null
   created_at: number
+  is_premium: boolean
 }
 
-function generateId(): string {
-  return crypto.randomBytes(16).toString('hex')
-}
-
-function hashPassword(password: string, salt: string): string {
-  return crypto.pbkdf2Sync(password, salt, 100_000, 64, 'sha512').toString('hex')
+function mapUser(u: SupabaseUser): User {
+  const googleIdentity = u.identities?.find((i) => i.provider === 'google')
+  return {
+    id: u.id,
+    email: u.email ?? '',
+    display_name:
+      u.user_metadata?.display_name ||
+      u.user_metadata?.full_name ||
+      u.email ||
+      '',
+    google_id: googleIdentity
+      ? (googleIdentity.identity_data?.sub ?? null)
+      : null,
+    created_at: new Date(u.created_at).getTime(),
+    is_premium: u.app_metadata?.is_premium === true,
+  }
 }
 
 export async function createUser(
@@ -22,61 +33,26 @@ export async function createUser(
   password: string,
   displayName: string
 ): Promise<User> {
-  const db = await getDb()
-
-  // Check if email already exists
-  const existing = db.exec('SELECT id FROM users WHERE email = ?', [email.toLowerCase().trim()])
-  if (existing[0]?.values?.length) {
-    throw new Error('An account with this email already exists')
-  }
-
-  const id = generateId()
-  const salt = crypto.randomBytes(32).toString('hex')
-  const passwordHash = hashPassword(password, salt)
-  const now = Date.now()
-  const normalizedEmail = email.toLowerCase().trim()
-
-  db.run(
-    `INSERT INTO users (id, email, password_hash, salt, display_name, google_id, created_at)
-     VALUES (?, ?, ?, ?, ?, NULL, ?)`,
-    [id, normalizedEmail, passwordHash, salt, displayName.trim() || normalizedEmail, now]
-  )
-  persist(db)
-
-  return { id, email: normalizedEmail, display_name: displayName.trim() || normalizedEmail, google_id: null, created_at: now }
+  const { data, error } = await supabase.auth.signUp({
+    email: email.toLowerCase().trim(),
+    password,
+    options: {
+      data: { display_name: displayName.trim() || email },
+    },
+  })
+  if (error) throw new Error(error.message)
+  if (!data.user) throw new Error('Registration failed — check your email to confirm your account')
+  return mapUser(data.user)
 }
 
 export async function loginUser(email: string, password: string): Promise<User> {
-  const db = await getDb()
-
-  const result = db.exec(
-    'SELECT id, email, password_hash, salt, display_name, google_id, created_at FROM users WHERE email = ?',
-    [email.toLowerCase().trim()]
-  )
-
-  if (!result[0]?.values?.length) {
-    throw new Error('Invalid email or password')
-  }
-
-  const [id, storedEmail, passwordHash, salt, displayName, googleId, createdAt] = result[0].values[0]
-
-  // If user was created via Google and has no password, reject password login
-  if (!passwordHash || !salt) {
-    throw new Error('Invalid email or password')
-  }
-
-  const attemptHash = hashPassword(password, salt as string)
-  if (attemptHash !== passwordHash) {
-    throw new Error('Invalid email or password')
-  }
-
-  return {
-    id: id as string,
-    email: storedEmail as string,
-    display_name: displayName as string,
-    google_id: googleId as string | null,
-    created_at: createdAt as number,
-  }
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email.toLowerCase().trim(),
+    password,
+  })
+  if (error) throw new Error(error.message)
+  if (!data.user) throw new Error('Login failed')
+  return mapUser(data.user)
 }
 
 export async function findOrCreateGoogleUser(
@@ -84,57 +60,45 @@ export async function findOrCreateGoogleUser(
   email: string,
   displayName: string
 ): Promise<User> {
-  const db = await getDb()
   const normalizedEmail = email.toLowerCase().trim()
+  const derivedPassword = `retias_google_${googleId}`
 
-  // Try find by google_id first
-  const byGoogleId = db.exec(
-    'SELECT id, email, display_name, google_id, created_at FROM users WHERE google_id = ?',
-    [googleId]
-  )
-  if (byGoogleId[0]?.values?.length) {
-    const [id, em, dn, gid, ca] = byGoogleId[0].values[0]
-    return { id: id as string, email: em as string, display_name: dn as string, google_id: gid as string, created_at: ca as number }
-  }
+  // Try sign in first (user already registered)
+  const { data: signInData, error: signInError } =
+    await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password: derivedPassword,
+    })
+  if (!signInError && signInData.user) return mapUser(signInData.user)
 
-  // Try find by email — link google_id to existing account
-  const byEmail = db.exec(
-    'SELECT id, email, display_name, google_id, created_at FROM users WHERE email = ?',
-    [normalizedEmail]
-  )
-  if (byEmail[0]?.values?.length) {
-    const [id, em, dn, , ca] = byEmail[0].values[0]
-    db.run('UPDATE users SET google_id = ? WHERE id = ?', [googleId, id as string])
-    persist(db)
-    return { id: id as string, email: em as string, display_name: dn as string, google_id: googleId, created_at: ca as number }
-  }
-
-  // Create new Google user
-  const id = generateId()
-  const now = Date.now()
-  db.run(
-    `INSERT INTO users (id, email, password_hash, salt, display_name, google_id, created_at)
-     VALUES (?, ?, NULL, NULL, ?, ?, ?)`,
-    [id, normalizedEmail, displayName.trim() || normalizedEmail, googleId, now]
-  )
-  persist(db)
-
-  return { id, email: normalizedEmail, display_name: displayName.trim() || normalizedEmail, google_id: googleId, created_at: now }
+  // Create new account
+  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+    email: normalizedEmail,
+    password: derivedPassword,
+    options: {
+      data: {
+        display_name: displayName.trim() || normalizedEmail,
+        google_id: googleId,
+      },
+    },
+  })
+  if (signUpError) throw new Error(signUpError.message)
+  if (!signUpData.user) throw new Error('Google sign-in failed')
+  return mapUser(signUpData.user)
 }
 
 export async function getUserById(userId: string): Promise<User | null> {
-  const db = await getDb()
-  const result = db.exec(
-    'SELECT id, email, display_name, google_id, created_at FROM users WHERE id = ?',
-    [userId]
-  )
-  if (!result[0]?.values?.length) return null
-  const [id, email, displayName, googleId, createdAt] = result[0].values[0]
-  return {
-    id: id as string,
-    email: email as string,
-    display_name: displayName as string,
-    google_id: googleId as string | null,
-    created_at: createdAt as number,
-  }
+  const { data: sessionData } = await supabase.auth.getSession()
+  if (!sessionData.session) return null
+
+  const { data: userData } = await supabase.auth.getUser()
+  if (!userData.user) return null
+  // Accept any valid session — userId is used for matching by the caller
+  if (userData.user.id !== userId) return null
+
+  return mapUser(userData.user)
+}
+
+export async function authLogout(): Promise<void> {
+  await supabase.auth.signOut()
 }

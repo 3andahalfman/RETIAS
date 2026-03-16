@@ -5,8 +5,8 @@ import fs from 'fs'
 import { app } from 'electron'
 
 /**
- * SQLite answer cache using sql.js (WebAssembly — no native compilation).
- * Same API as before but backed by sql.js instead of better-sqlite3.
+ * Local SQLite cache for LLM answers and context profiles.
+ * User data (sessions, CVs, auth) now lives in Supabase.
  */
 
 let db: Database | null = null
@@ -52,7 +52,6 @@ export async function getDb(): Promise<Database> {
 
   dbPath = path.join(app?.getPath?.('userData') ?? '.', 'interview-cache.db')
 
-  // Load existing DB from disk if present
   if (fs.existsSync(dbPath)) {
     const fileBuffer = fs.readFileSync(dbPath)
     db = new SQL.Database(fileBuffer)
@@ -81,64 +80,6 @@ export async function getDb(): Promise<Database> {
       created_at INTEGER NOT NULL
     );
   `)
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS past_sessions (
-      session_id TEXT PRIMARY KEY,
-      company TEXT NOT NULL DEFAULT '',
-      target_role TEXT NOT NULL DEFAULT '',
-      started_at INTEGER NOT NULL,
-      ended_at INTEGER,
-      qa_count INTEGER NOT NULL DEFAULT 0
-    );
-  `)
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS session_qa (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id TEXT NOT NULL,
-      question TEXT NOT NULL,
-      question_type TEXT NOT NULL,
-      answer TEXT NOT NULL,
-      timestamp INTEGER NOT NULL
-    );
-  `)
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS session_transcript (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id TEXT NOT NULL,
-      role TEXT NOT NULL,
-      text TEXT NOT NULL,
-      timestamp INTEGER NOT NULL
-    );
-  `)
-
-  // Auth tables
-  db.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      email TEXT UNIQUE NOT NULL,
-      password_hash TEXT,
-      salt TEXT,
-      display_name TEXT NOT NULL DEFAULT '',
-      google_id TEXT,
-      created_at INTEGER NOT NULL
-    );
-  `)
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS cvs (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      content TEXT NOT NULL,
-      created_at INTEGER NOT NULL
-    );
-  `)
-
-  // Migration: add user_id to past_sessions if it doesn't exist yet
-  try { db.run('ALTER TABLE past_sessions ADD COLUMN user_id TEXT') } catch {}
 
   seedCommonQuestions(db)
   persist(db)

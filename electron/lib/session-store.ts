@@ -1,4 +1,4 @@
-import { getDb, persist } from './cache.js'
+import { supabase } from './supabase.js'
 
 export interface PastSession {
   session_id: string
@@ -31,137 +31,6 @@ export interface SessionDetail extends PastSession {
   transcript: SessionTranscriptLine[]
 }
 
-export async function createSession(
-  sessionId: string,
-  company: string,
-  targetRole: string,
-  userId?: string
-): Promise<void> {
-  const db = await getDb()
-  db.run(
-    `INSERT OR IGNORE INTO past_sessions (session_id, company, target_role, started_at, qa_count, user_id)
-     VALUES (?, ?, ?, ?, 0, ?)`,
-    [sessionId, company || '', targetRole || '', Date.now(), userId ?? null]
-  )
-  persist(db)
-}
-
-export async function endSession(sessionId: string): Promise<void> {
-  const db = await getDb()
-  db.run(`UPDATE past_sessions SET ended_at = ? WHERE session_id = ?`, [Date.now(), sessionId])
-  persist(db)
-}
-
-export async function addTranscriptLine(
-  sessionId: string,
-  role: string,
-  text: string,
-  timestamp: number
-): Promise<void> {
-  const db = await getDb()
-  db.run(
-    `INSERT INTO session_transcript (session_id, role, text, timestamp) VALUES (?, ?, ?, ?)`,
-    [sessionId, role, text, timestamp]
-  )
-  persist(db)
-}
-
-export async function addQA(
-  sessionId: string,
-  question: string,
-  questionType: string,
-  answer: string,
-  timestamp: number
-): Promise<void> {
-  const db = await getDb()
-  db.run(
-    `INSERT INTO session_qa (session_id, question, question_type, answer, timestamp)
-     VALUES (?, ?, ?, ?, ?)`,
-    [sessionId, question, questionType, answer, timestamp]
-  )
-  db.run(
-    `UPDATE past_sessions SET qa_count = qa_count + 1 WHERE session_id = ?`,
-    [sessionId]
-  )
-  persist(db)
-}
-
-export async function getSessions(userId?: string): Promise<PastSession[]> {
-  const db = await getDb()
-  let result
-  if (userId) {
-    result = db.exec(
-      `SELECT session_id, company, target_role, started_at, ended_at, qa_count
-       FROM past_sessions WHERE user_id = ? ORDER BY started_at DESC LIMIT 100`,
-      [userId]
-    )
-  } else {
-    result = db.exec(
-      `SELECT session_id, company, target_role, started_at, ended_at, qa_count
-       FROM past_sessions ORDER BY started_at DESC LIMIT 100`
-    )
-  }
-  if (!result[0]) return []
-  return result[0].values.map((row) => ({
-    session_id: row[0] as string,
-    company: row[1] as string,
-    target_role: row[2] as string,
-    started_at: row[3] as number,
-    ended_at: row[4] as number | null,
-    qa_count: row[5] as number,
-  }))
-}
-
-export async function getSessionDetail(sessionId: string): Promise<SessionDetail | null> {
-  const db = await getDb()
-
-  const sessResult = db.exec(
-    `SELECT session_id, company, target_role, started_at, ended_at, qa_count
-     FROM past_sessions WHERE session_id = ?`,
-    [sessionId]
-  )
-  if (!sessResult[0]?.values?.[0]) return null
-  const [sid, company, role, started_at, ended_at, qa_count] = sessResult[0].values[0]
-
-  const qaResult = db.exec(
-    `SELECT id, session_id, question, question_type, answer, timestamp
-     FROM session_qa WHERE session_id = ? ORDER BY timestamp ASC`,
-    [sessionId]
-  )
-  const qa: SessionQA[] = (qaResult[0]?.values ?? []).map((row) => ({
-    id: row[0] as number,
-    session_id: row[1] as string,
-    question: row[2] as string,
-    question_type: row[3] as string,
-    answer: row[4] as string,
-    timestamp: row[5] as number,
-  }))
-
-  const txResult = db.exec(
-    `SELECT id, session_id, role, text, timestamp
-     FROM session_transcript WHERE session_id = ? ORDER BY timestamp ASC`,
-    [sessionId]
-  )
-  const transcript: SessionTranscriptLine[] = (txResult[0]?.values ?? []).map((row) => ({
-    id: row[0] as number,
-    session_id: row[1] as string,
-    role: row[2] as string,
-    text: row[3] as string,
-    timestamp: row[4] as number,
-  }))
-
-  return {
-    session_id: sid as string,
-    company: company as string,
-    target_role: role as string,
-    started_at: started_at as number,
-    ended_at: ended_at as number | null,
-    qa_count: qa_count as number,
-    qa,
-    transcript,
-  }
-}
-
 export interface DashboardMetrics {
   totalSessions: number
   totalQAs: number
@@ -171,76 +40,189 @@ export interface DashboardMetrics {
   recentSessions: PastSession[]
 }
 
-export async function getDashboardMetrics(userId?: string): Promise<DashboardMetrics> {
-  const db = await getDb()
+function toEpoch(ts: string | null | undefined): number | null {
+  if (!ts) return null
+  return new Date(ts).getTime()
+}
 
-  const whereClause = userId ? `WHERE user_id = '${userId.replace(/'/g, "''")}'` : ''
-  const andClause = userId ? `AND user_id = '${userId.replace(/'/g, "''")}'` : ''
+function mapSession(row: Record<string, unknown>): PastSession {
+  return {
+    session_id: row.id as string,
+    company: (row.company as string) ?? '',
+    target_role: (row.target_role as string) ?? '',
+    started_at: toEpoch(row.started_at as string) ?? Date.now(),
+    ended_at: toEpoch(row.ended_at as string | null),
+    qa_count: (row.qa_count as number) ?? 0,
+  }
+}
 
-  const sessCount = db.exec(`SELECT COUNT(*) FROM past_sessions ${whereClause}`)
-  const totalSessions = (sessCount[0]?.values[0]?.[0] as number) ?? 0
+export async function createSession(
+  sessionId: string,
+  company: string,
+  targetRole: string,
+  userId?: string
+): Promise<void> {
+  const { error } = await supabase.from('past_sessions').insert({
+    id: sessionId,
+    user_id: userId ?? null,
+    company: company || '',
+    target_role: targetRole || '',
+    started_at: new Date().toISOString(),
+    qa_count: 0,
+  })
+  if (error) console.error('[session-store] createSession error:', error.message)
+}
 
-  // For QA/transcript counts, filter via session_id subquery if userId provided
-  let totalQAs = 0
-  let totalTranscriptLines = 0
-  if (userId) {
-    const qaCount = db.exec(
-      `SELECT COUNT(*) FROM session_qa WHERE session_id IN (SELECT session_id FROM past_sessions WHERE user_id = ?)`,
-      [userId]
-    )
-    totalQAs = (qaCount[0]?.values[0]?.[0] as number) ?? 0
+export async function endSession(sessionId: string): Promise<void> {
+  const { error } = await supabase
+    .from('past_sessions')
+    .update({ ended_at: new Date().toISOString() })
+    .eq('id', sessionId)
+  if (error) console.error('[session-store] endSession error:', error.message)
+}
 
-    const txCount = db.exec(
-      `SELECT COUNT(*) FROM session_transcript WHERE session_id IN (SELECT session_id FROM past_sessions WHERE user_id = ?)`,
-      [userId]
-    )
-    totalTranscriptLines = (txCount[0]?.values[0]?.[0] as number) ?? 0
-  } else {
-    const qaCount = db.exec('SELECT COUNT(*) FROM session_qa')
-    totalQAs = (qaCount[0]?.values[0]?.[0] as number) ?? 0
+export async function addTranscriptLine(
+  sessionId: string,
+  role: string,
+  text: string,
+  timestamp: number
+): Promise<void> {
+  const { error } = await supabase.from('session_transcript').insert({
+    session_id: sessionId,
+    role,
+    text,
+    created_at: new Date(timestamp).toISOString(),
+  })
+  if (error) console.error('[session-store] addTranscriptLine error:', error.message)
+}
 
-    const txCount = db.exec('SELECT COUNT(*) FROM session_transcript')
-    totalTranscriptLines = (txCount[0]?.values[0]?.[0] as number) ?? 0
+export async function addQA(
+  sessionId: string,
+  question: string,
+  questionType: string,
+  answer: string,
+  timestamp: number
+): Promise<void> {
+  const { error: qaError } = await supabase.from('session_qa').insert({
+    session_id: sessionId,
+    question,
+    question_type: questionType,
+    answer,
+    created_at: new Date(timestamp).toISOString(),
+  })
+  if (qaError) {
+    console.error('[session-store] addQA error:', qaError.message)
+    return
   }
 
-  const durResult = db.exec(`SELECT AVG(ended_at - started_at) FROM past_sessions WHERE ended_at IS NOT NULL ${andClause}`)
-  const avgMs = (durResult[0]?.values[0]?.[0] as number) ?? 0
-  const avgDurationMins = Math.round(avgMs / 60000)
+  // Increment qa_count
+  const { data: sess } = await supabase
+    .from('past_sessions')
+    .select('qa_count')
+    .eq('id', sessionId)
+    .single()
+  if (sess) {
+    await supabase
+      .from('past_sessions')
+      .update({ qa_count: ((sess.qa_count as number) ?? 0) + 1 })
+      .eq('id', sessionId)
+  }
+}
 
-  const topCo = db.exec(
-    `SELECT company, COUNT(*) as cnt FROM past_sessions WHERE company != '' ${andClause} GROUP BY company ORDER BY cnt DESC LIMIT 1`
-  )
-  const topCompany = (topCo[0]?.values[0]?.[0] as string) ?? null
+export async function getSessions(userId?: string): Promise<PastSession[]> {
+  const { data, error } = await supabase
+    .from('past_sessions')
+    .select('id, company, target_role, started_at, ended_at, qa_count')
+    .order('started_at', { ascending: false })
+    .limit(100)
 
-  const recentResult = db.exec(
-    `SELECT session_id, company, target_role, started_at, ended_at, qa_count FROM past_sessions ${whereClause} ORDER BY started_at DESC LIMIT 3`
-  )
-  const recentSessions: PastSession[] = (recentResult[0]?.values ?? []).map((row) => ({
-    session_id: row[0] as string,
-    company: row[1] as string,
-    target_role: row[2] as string,
-    started_at: row[3] as number,
-    ended_at: row[4] as number | null,
-    qa_count: row[5] as number,
+  if (error) {
+    console.error('[session-store] getSessions error:', error.message)
+    return []
+  }
+  return (data ?? []).map(mapSession)
+}
+
+export async function getSessionDetail(sessionId: string): Promise<SessionDetail | null> {
+  const { data: sess, error: sessError } = await supabase
+    .from('past_sessions')
+    .select('id, company, target_role, started_at, ended_at, qa_count')
+    .eq('id', sessionId)
+    .single()
+
+  if (sessError || !sess) return null
+
+  const [{ data: qaData }, { data: txData }] = await Promise.all([
+    supabase
+      .from('session_qa')
+      .select('id, session_id, question, question_type, answer, created_at')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('session_transcript')
+      .select('id, session_id, role, text, created_at')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true }),
+  ])
+
+  const qa: SessionQA[] = (qaData ?? []).map((row, i) => ({
+    id: (row.id as number) ?? i,
+    session_id: row.session_id as string,
+    question: row.question as string,
+    question_type: row.question_type as string,
+    answer: row.answer as string,
+    timestamp: toEpoch(row.created_at as string) ?? Date.now(),
   }))
 
-  return { totalSessions, totalQAs, totalTranscriptLines, avgDurationMins, topCompany, recentSessions }
+  const transcript: SessionTranscriptLine[] = (txData ?? []).map((row, i) => ({
+    id: (row.id as number) ?? i,
+    session_id: row.session_id as string,
+    role: row.role as string,
+    text: row.text as string,
+    timestamp: toEpoch(row.created_at as string) ?? Date.now(),
+  }))
+
+  return { ...mapSession(sess as Record<string, unknown>), qa, transcript }
+}
+
+export async function getDashboardMetrics(userId?: string): Promise<DashboardMetrics> {
+  const [sessResult, qaCount, txCount, allSessions] = await Promise.all([
+    supabase.from('past_sessions').select('*', { count: 'exact', head: true }),
+    supabase.from('session_qa').select('*', { count: 'exact', head: true }),
+    supabase.from('session_transcript').select('*', { count: 'exact', head: true }),
+    supabase
+      .from('past_sessions')
+      .select('id, company, target_role, started_at, ended_at, qa_count')
+      .order('started_at', { ascending: false }),
+  ])
+
+  const sessions = (allSessions.data ?? []).map(mapSession)
+
+  const completed = sessions.filter((s) => s.ended_at !== null)
+  const avgMs = completed.length
+    ? completed.reduce((sum, s) => sum + (s.ended_at! - s.started_at), 0) / completed.length
+    : 0
+  const avgDurationMins = Math.round(avgMs / 60000)
+
+  const companyCount: Record<string, number> = {}
+  for (const s of sessions) {
+    if (s.company) companyCount[s.company] = (companyCount[s.company] ?? 0) + 1
+  }
+  const topCompany =
+    Object.keys(companyCount).sort((a, b) => companyCount[b] - companyCount[a])[0] ?? null
+
+  return {
+    totalSessions: sessResult.count ?? 0,
+    totalQAs: qaCount.count ?? 0,
+    totalTranscriptLines: txCount.count ?? 0,
+    avgDurationMins,
+    topCompany,
+    recentSessions: sessions.slice(0, 3),
+  }
 }
 
 export async function deleteSession(sessionId: string, userId?: string): Promise<void> {
-  const db = await getDb()
-
-  // Verify ownership if userId provided
-  if (userId) {
-    const check = db.exec(
-      `SELECT session_id FROM past_sessions WHERE session_id = ? AND user_id = ?`,
-      [sessionId, userId]
-    )
-    if (!check[0]?.values?.length) return // session not owned by user, silently ignore
-  }
-
-  db.run(`DELETE FROM session_transcript WHERE session_id = ?`, [sessionId])
-  db.run(`DELETE FROM session_qa WHERE session_id = ?`, [sessionId])
-  db.run(`DELETE FROM past_sessions WHERE session_id = ?`, [sessionId])
-  persist(db)
+  // RLS ensures ownership; CASCADE deletes related qa + transcript rows
+  const { error } = await supabase.from('past_sessions').delete().eq('id', sessionId)
+  if (error) console.error('[session-store] deleteSession error:', error.message)
 }
