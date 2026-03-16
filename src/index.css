@@ -117,12 +117,17 @@ html, body, #root {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  background: var(--bg-solid);
+  overflow: hidden;
+}
+
+/* Only the session overlay is transparent/glass */
+.app-root.session {
   background: var(--bg-overlay);
   -webkit-backdrop-filter: var(--blur-md);
   backdrop-filter: var(--blur-md);
   border: 1px solid var(--border-light);
   border-radius: var(--radius);
-  overflow: hidden;
   box-shadow: var(--shadow-glass),
               inset 0 1px 0 var(--border-specular),
               inset 0 0 0 1px rgba(255,255,255,0.04);
@@ -765,8 +770,9 @@ html, body, #root {
 .setup-root {
   display: flex;
   flex-direction: column;
-  height: auto;
-  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   background: #09090b;
   color: #f4f4f5;
 }
@@ -1821,9 +1827,11 @@ html, body, #root {
 .dash-root {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
   background: transparent;
   color: var(--text-primary);
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .dash-hero {
@@ -2194,6 +2202,7 @@ html, body, #root {
 }
 
 .dash-footer {
+  margin-top: auto;
   padding: 12px 24px 16px;
   display: flex;
   align-items: center;
@@ -2356,9 +2365,7 @@ html, body, #root {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(6, 6, 14, 0.60);
-  -webkit-backdrop-filter: var(--blur-md);
-  backdrop-filter: var(--blur-md);
+  background: var(--bg-solid);
   height: 100vh;
   padding: 24px;
   position: relative;

@@ -226,7 +226,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-root ${isDocked ? 'docked' : ''}`}>
+    <div className={`app-root session ${isDocked ? 'docked' : ''}`}>
       <AudioCapture active={isStarted && sessionActive && micActive} />
 
       {isDocked && (
