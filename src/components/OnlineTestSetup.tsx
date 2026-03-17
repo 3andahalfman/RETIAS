@@ -74,6 +74,7 @@ export default function OnlineTestSetup({ onStart, onBack, onDock }: Props) {
           <span className="setup-brand-name">RETIAS</span>
         </div>
         <div className="setup-topbar-right">
+          <button type="button" className="setup-window-btn" title="Back to Dashboard" onClick={onBack}>←</button>
           <button type="button" className="setup-window-btn" title="Dock" onClick={onDock}>↙</button>
           <button type="button" className="setup-window-btn close" title="Close" onClick={() => window.electronAPI?.closeWindow()}>✕</button>
         </div>
