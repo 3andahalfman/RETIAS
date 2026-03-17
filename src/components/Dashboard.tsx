@@ -20,12 +20,13 @@ interface Props {
   onNewSession: () => void
   onPastSessions: () => void
   onMockInterview: () => void
+  onOnlineTest: () => void
   onDock: () => void
   user: User
   onLogout: () => void
 }
 
-export default function Dashboard({ onNewSession, onPastSessions, onMockInterview, onDock, user, onLogout }: Props) {
+export default function Dashboard({ onNewSession, onPastSessions, onMockInterview, onOnlineTest, onDock, user, onLogout }: Props) {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
   const [showSnapGrid, setShowSnapGrid] = useState(false)
   const [cvs, setCvs] = useState<CV[]>([])
@@ -178,6 +179,22 @@ export default function Dashboard({ onNewSession, onPastSessions, onMockIntervie
             <span className="dash-cta-desc">Practice with a YouTube interviewer</span>
           </span>
         </button>
+        <button
+          type="button"
+          className={`dash-cta-btn test${!user.is_premium ? ' locked' : ''}`}
+          onClick={user.is_premium ? onOnlineTest : undefined}
+          title={user.is_premium ? undefined : '🔒 Premium feature — upgrade to unlock'}
+        >
+          <span className="dash-cta-icon">🧪</span>
+          <span>
+            <span className="dash-cta-label">
+              Online Test & Onboarding{!user.is_premium && <span className="cta-lock-badge"> 🔒</span>}
+            </span>
+            <span className="dash-cta-desc">
+              {user.is_premium ? 'AI answers for assessments & e-learning' : 'Premium — upgrade to unlock'}
+            </span>
+          </span>
+        </button>
       </div>
 
       {/* Metrics */}
@@ -274,7 +291,7 @@ export default function Dashboard({ onNewSession, onPastSessions, onMockIntervie
 
       <div className="dash-footer">
         <span className="dash-footer-text">RETIAS — Real Time Interview Assistant Software</span>
-        <span className="dash-footer-version">v1.4.2</span>
+        <span className="dash-footer-version">v1.4.6</span>
       </div>
     </div>
   )

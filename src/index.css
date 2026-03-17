@@ -1916,6 +1916,106 @@ html, body, #root {
   border-color: rgba(124,111,247,0.50);
 }
 
+/* Online Test & Onboarding CTA */
+.dash-cta-btn.test {
+  background: var(--bg-card);
+  border-color: rgba(20, 184, 166, 0.35);
+  color: var(--text-primary);
+}
+.dash-cta-btn.test:hover:not(.locked) {
+  background: rgba(20, 184, 166, 0.10);
+  border-color: rgba(20, 184, 166, 0.55);
+}
+.dash-cta-btn.test.locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+  border-color: var(--border);
+}
+.cta-lock-badge {
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+/* ── Online Test Setup Page ── */
+.online-test-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #09090b;
+  overflow: hidden;
+}
+.online-test-header {
+  padding: 20px 28px 8px;
+}
+.online-test-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+.online-test-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.online-test-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+.online-test-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  padding: 12px 28px 6px;
+}
+.online-test-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 0 28px 16px;
+  align-content: start;
+}
+.online-test-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.online-test-card:hover {
+  border-color: rgba(20, 184, 166, 0.5);
+  background: rgba(20, 184, 166, 0.06);
+}
+.online-test-card.selected {
+  border-color: rgba(20, 184, 166, 0.8);
+  background: rgba(20, 184, 166, 0.12);
+  box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.20);
+}
+.online-test-card-icon {
+  font-size: 22px;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+.online-test-card-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.online-test-card-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
 /* ── Mock Interview Setup ── */
 .mock-header {
   display: flex;

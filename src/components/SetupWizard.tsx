@@ -1,5 +1,24 @@
 import { useState, useRef } from 'react'
 
+const ROLE_PRESETS = [
+  'Senior Software Engineer in Test',
+  'Automotive Engineer with Python',
+  'Data Science (Python & SQL)',
+  'Electrical Engineer with Python',
+  'Energy Engineer with Python',
+  'English Writer',
+  'Freelance Legal Consultant (US Law)',
+  'Legal Consultant (US Law)',
+  'Machine Learning Engineer (Python)',
+  'Mathematics Expert with Python',
+  'Mechanical Engineer with Python',
+  'Physics Expert with Python',
+  'Senior Consultant (McKinsey / BCG / Bain)',
+  'Senior Python Engineer',
+  'Statistics Expert with Python',
+  'Vibe Coding Web Scraping Expert',
+]
+
 const DEFAULT_EXTRA_CONTEXT = `Do not use generic AI buzzwords or filler phrases. Avoid words like: innovative, cutting-edge, robust, scalable, seamless, dynamic, synergy, transformative, optimized, disruptive, agile, empowering, streamlined, next-generation, impactful. Avoid phrases like: leveraging technology, driving innovation, delivering value, data-driven insights, future-ready, mission-critical, customer-centric, scalable architecture, proven track record, results-oriented, passionate professional, strong team player, go-getter attitude. Use plain, specific, direct language instead.`
 
 interface SetupProps {
@@ -43,6 +62,7 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [] 
 
   // Step 1 fields
   const [company, setCompany] = useState('')
+  const [targetRole, setTargetRole] = useState('')
   const [jobUrl, setJobUrl] = useState('')
   const [jobDescription, setJobDescription] = useState('')
   const [resumeText, setResumeText] = useState('')
@@ -74,7 +94,7 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [] 
       extraContext,
       autoGenerate,
       aiModel,
-      targetRole: jobDescription || 'Software Engineer',
+      targetRole: targetRole || jobDescription || 'Software Engineer',
       interviewType: 'SWE',
     })
   }
@@ -122,6 +142,7 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [] 
       if (result?.success) {
         if (result.jobDescription) setJobDescription(result.jobDescription)
         if (result.company && !company) setCompany(result.company)
+        if (result.targetRole && !targetRole) setTargetRole(result.targetRole)
       } else {
         setValidationMsg(`Could not scrape URL: ${result?.error ?? 'Unknown error'}`)
       }
@@ -203,6 +224,22 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [] 
                 <div className="setup-field">
                   <label className="setup-label" htmlFor="company">🏢 Company</label>
                   <input id="company" className="setup-input" placeholder="Microsoft..." value={company} onChange={(e) => setCompany(e.target.value)} />
+                </div>
+
+                {/* Target Role */}
+                <div className="setup-field">
+                  <label className="setup-label" htmlFor="target-role">🎯 Target Role <span className="setup-label-sub">(Optional — type or pick a preset)</span></label>
+                  <input
+                    id="target-role"
+                    className="setup-input"
+                    list="role-presets"
+                    placeholder="e.g. Senior Python Engineer"
+                    value={targetRole}
+                    onChange={(e) => setTargetRole(e.target.value)}
+                  />
+                  <datalist id="role-presets">
+                    {ROLE_PRESETS.map((r) => <option key={r} value={r} />)}
+                  </datalist>
                 </div>
 
                 {/* Job Description */}
