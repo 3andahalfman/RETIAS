@@ -84,6 +84,8 @@ interface ElectronAPI {
   getAudioDevices: () => Promise<any[]>
   getDesktopSources: () => Promise<Array<{ id: string; name: string }>>
   analyseScreen: () => Promise<void>
+  captureScreen: () => Promise<string>
+  analyseScreens: (images: string[]) => Promise<void>
   sendAudioChunk: (buffer: ArrayBuffer, sampleRate: number, source: 'mic' | 'system') => void
 
   // Answer streaming

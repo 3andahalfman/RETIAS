@@ -1,6 +1,6 @@
 {
   "name": "retias",
-  "version": "1.4.7",
+  "version": "1.4.8",
   "description": "Real Time Interview Assistant Software — AI-powered real-time coaching",
   "main": "dist/electron/main.js",
   "scripts": {

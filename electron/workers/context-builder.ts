@@ -26,10 +26,14 @@ export class ContextBuilder {
   private extractedContext: ExtractedContext | null = null
   private extractionPromise: Promise<void> | null = null
 
+  // Rolling conversation history — last 2 Q&A pairs for follow-up context
+  private answerHistory: { question: string; answer: string }[] = []
+
   // Stored handler references for proper cleanup
   private sessionHandler: ((config: SessionConfig) => void) | null = null
   private questionHandler: ((question: string, type: QuestionType, context: string) => void) | null = null
   private updateHandler: ((question: string, type: QuestionType, context: string) => void) | null = null
+  private answerHandler: ((question: string, _type: string, answer: string) => void) | null = null
 
   constructor(ipcBus: IpcBus) {
     this.ipcBus = ipcBus
@@ -38,6 +42,7 @@ export class ContextBuilder {
       this.sessionConfig = config
       this.extractedContext = null
       this.extractionPromise = this.runExtraction(config)
+      this.answerHistory = []
     }
 
     this.questionHandler = (question: string, type: QuestionType, context: string) => {
@@ -50,9 +55,14 @@ export class ContextBuilder {
       this.buildAndEmit(question, type, context).catch(console.error)
     }
 
+    this.answerHandler = (question: string, _type: string, answer: string) => {
+      this.answerHistory = [...this.answerHistory, { question, answer }].slice(-2)
+    }
+
     this.ipcBus.on('session:started', this.sessionHandler)
     this.ipcBus.on('question:detected', this.questionHandler)
     this.ipcBus.on('question:update', this.updateHandler)
+    this.ipcBus.on('answer:complete', this.answerHandler)
   }
 
   /** Runs extraction async at session start — result stored for question-time use */
@@ -112,7 +122,7 @@ export class ContextBuilder {
       // ── Structured path (normal) ──────────────────────────────────────────
       const { profile, job, company, style } = this.extractedContext
       systemPrompt = buildSystemPrompt(type, profile, job, company, style, config?.language, config?.extraContext)
-      userMessage = buildUserMessage(question, contextWindow, type, profile.candidate_name)
+      userMessage = buildUserMessage(question, contextWindow, type, profile.candidate_name, this.answerHistory)
     } else {
       // ── Legacy fallback (extraction failed or no resume/JD provided) ──────
       systemPrompt = this.buildLegacySystemPrompt(type, config)
@@ -185,7 +195,12 @@ Use the candidate's resume context when relevant. Be specific — no filler phra
       this.ipcBus.removeListener('question:update', this.updateHandler)
       this.updateHandler = null
     }
+    if (this.answerHandler) {
+      this.ipcBus.removeListener('answer:complete', this.answerHandler)
+      this.answerHandler = null
+    }
     this.extractedContext = null
     this.extractionPromise = null
+    this.answerHistory = []
   }
 }

@@ -159,6 +159,25 @@ async function bootstrap() {
     ipcBus.emit('screen:analyse', base64)
   })
 
+  // Capture screenshot and return base64 to renderer (no LLM call)
+  ipcMain.handle('screen:capture', async () => {
+    if (!currentUserIsPremium) throw new Error('Screen Analysis is a premium feature. Upgrade your account to use it.')
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 1920, height: 1080 },
+    })
+    const source = sources[0]
+    if (!source) throw new Error('No screen source found')
+    const png = source.thumbnail.toPNG()
+    return Buffer.from(png).toString('base64')
+  })
+
+  // Send multiple captured screenshots to LLM worker for batch analysis
+  ipcMain.handle('screen:analyse-multi', async (_event, images: string[]) => {
+    if (!currentUserIsPremium) throw new Error('Screen Analysis is a premium feature. Upgrade your account to use it.')
+    ipcBus.emit('screen:analyse-multi', images)
+  })
+
   ipcMain.on('session:start', (_event, config) => {
     // Refresh screen source cache at session start in case displays changed since startup
     desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {

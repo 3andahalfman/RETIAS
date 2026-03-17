@@ -16,6 +16,7 @@ interface ToolbarProps {
   onToggleDock: () => void
   convState?: string
   isPremium?: boolean
+  isOnlineTest?: boolean
 }
 
 export default function Toolbar({
@@ -29,11 +30,13 @@ export default function Toolbar({
   onToggleDock,
   convState = 'IDLE',
   isPremium = false,
+  isOnlineTest = false,
 }: ToolbarProps) {
   const [elapsed, setElapsed] = useState(0)
   const [menuOpen, setMenuOpen] = useState(false)
   const [snapOpen, setSnapOpen] = useState(false)
   const [analysing, setAnalysing] = useState(false)
+  const [captureQueue, setCaptureQueue] = useState<string[]>([])
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -84,6 +87,25 @@ export default function Toolbar({
       setAnalysing(false)
     }
   }
+
+  const handleCapture = async () => {
+    if (captureQueue.length >= 5) return
+    try {
+      const base64 = await window.electronAPI?.captureScreen()
+      if (base64) setCaptureQueue(prev => [...prev, base64])
+    } catch {}
+  }
+
+  const handleAnalyseAll = () => {
+    if (captureQueue.length === 0) return
+    window.electronAPI?.analyseScreens(captureQueue)
+    setCaptureQueue([])
+  }
+
+  // Reset capture queue when session ends
+  useEffect(() => {
+    if (!sessionActive) setCaptureQueue([])
+  }, [sessionActive])
 
   const minutes = Math.floor(elapsed / 60)
   const seconds = elapsed % 60
@@ -156,15 +178,41 @@ export default function Toolbar({
         )}
 
         {isStarted && sessionActive && (
-          <button
-            type="button"
-            className={`toolbar-action-btn analyse-screen-btn${analysing ? ' loading' : ''}${!isPremium ? ' locked' : ''}`}
-            title={isPremium ? 'Analyse Screen — capture screen and get AI solution' : '🔒 Premium feature — upgrade to unlock'}
-            onClick={isPremium ? handleAnalyseScreen : undefined}
-            disabled={analysing || !isPremium}
-          >
-            {analysing ? '⏳' : <>{!isPremium && <span className="analyse-lock">🔒</span>}🖥 Analyse</>}
-          </button>
+          isOnlineTest ? (
+            <div className="capture-queue-ui">
+              <button
+                type="button"
+                className="toolbar-action-btn capture-btn"
+                onClick={handleCapture}
+                disabled={captureQueue.length >= 5}
+                title={captureQueue.length >= 5 ? 'Max 5 screenshots' : 'Capture screenshot'}
+              >
+                📸{captureQueue.length > 0 ? ` ${captureQueue.length}` : ' Capture'}
+              </button>
+              {captureQueue.length > 0 && (
+                <button type="button" className="toolbar-icon-btn" onClick={() => setCaptureQueue([])} title="Clear captures">✕</button>
+              )}
+              <button
+                type="button"
+                className="toolbar-action-btn analyse-screen-btn"
+                onClick={handleAnalyseAll}
+                disabled={captureQueue.length === 0}
+                title="Send all screenshots to AI"
+              >
+                Analyse All →
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className={`toolbar-action-btn analyse-screen-btn${analysing ? ' loading' : ''}${!isPremium ? ' locked' : ''}`}
+              title={isPremium ? 'Analyse Screen — capture screen and get AI solution' : '🔒 Premium feature — upgrade to unlock'}
+              onClick={isPremium ? handleAnalyseScreen : undefined}
+              disabled={analysing || !isPremium}
+            >
+              {analysing ? '⏳' : <>{!isPremium && <span className="analyse-lock">🔒</span>}🖥 Analyse</>}
+            </button>
+          )
         )}
 
         {/* End session / menu */}

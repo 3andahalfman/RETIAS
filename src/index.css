@@ -2886,6 +2886,30 @@ html, body, #root {
 .update-banner-fill { height: 100%; background: #4caf50; border-radius: 3px; transition: width 0.3s; }
 
 /* ── Analyse Screen Button (Premium) ── */
+/* ── Online Test — Capture Queue UI ── */
+.capture-queue-ui {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.capture-btn {
+  background: linear-gradient(135deg, rgba(52,211,153,0.85), rgba(16,185,129,0.75));
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  color: #fff;
+  border: 1px solid rgba(52,211,153,0.40);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: box-shadow 0.2s, opacity 0.15s;
+  white-space: nowrap;
+  box-shadow: 0 0 12px rgba(52,211,153,0.25);
+}
+.capture-btn:hover:not(:disabled) { box-shadow: 0 0 20px rgba(52,211,153,0.45); }
+.capture-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .analyse-screen-btn {
   background: linear-gradient(135deg, rgba(124,111,247,0.85), rgba(139,92,246,0.75));
   -webkit-backdrop-filter: blur(12px);

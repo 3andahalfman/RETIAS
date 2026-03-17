@@ -138,6 +138,7 @@ export class LLMWorker {
     this.ipcBus.on('context:ready', this.contextHandler)
     this.ipcBus.on('overlay:regenerate', this.regenerateHandler)
     this.ipcBus.on('screen:analyse', (base64Image: string) => this.analyseScreen(base64Image))
+    this.ipcBus.on('screen:analyse-multi', (images: string[]) => this.analyseScreenMulti(images))
   }
 
   /** Abort the active stream if one is running, returns true if aborted */
@@ -272,6 +273,53 @@ export class LLMWorker {
       const isAbort = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort')
       if (!isAbort) {
         console.error('[LLMWorker] Screen analysis error:', err?.message)
+        this.ipcBus.emit('llm:token', '\n\n⚠️ Screen analysis failed. Please try again.')
+        this.ipcBus.emit('llm:done')
+      }
+    } finally {
+      this.currentStream = null
+      this.isGenerating = false
+    }
+  }
+
+  private async analyseScreenMulti(images: string[]) {
+    if (this.isGenerating) this.abortCurrent()
+    this.ipcBus.emit('screen:card', 'Screen Analysis', 'general')
+    this.isGenerating = true
+    let fullResponse = ''
+    try {
+      console.log(`[LLMWorker] Analysing ${images.length} screenshots with vision...`)
+      const imageBlocks = images.map(data => ({
+        type: 'image' as const,
+        source: { type: 'base64' as const, media_type: 'image/png' as const, data },
+      }))
+      const stream = this.client.messages.stream({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2048,
+        system: getScreenAnalysisPrompt(this.sessionTestType),
+        messages: [{
+          role: 'user',
+          content: [
+            ...imageBlocks,
+            { type: 'text', text: `Solve all questions shown across these ${images.length} screenshots.` },
+          ],
+        }],
+      })
+      this.currentStream = stream
+      for await (const event of stream) {
+        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+          fullResponse += event.delta.text
+          this.ipcBus.emit('llm:token', event.delta.text)
+        }
+      }
+      this.ipcBus.emit('llm:done')
+      if (fullResponse) {
+        await this.cache.set('ScreenMulti_' + Date.now(), 'general', fullResponse)
+      }
+    } catch (err: any) {
+      const isAbort = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort')
+      if (!isAbort) {
+        console.error('[LLMWorker] Multi-screen analysis error:', err?.message)
         this.ipcBus.emit('llm:token', '\n\n⚠️ Screen analysis failed. Please try again.')
         this.ipcBus.emit('llm:done')
       }

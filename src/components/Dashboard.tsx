@@ -291,7 +291,7 @@ export default function Dashboard({ onNewSession, onPastSessions, onMockIntervie
 
       <div className="dash-footer">
         <span className="dash-footer-text">RETIAS — Real Time Interview Assistant Software</span>
-        <span className="dash-footer-version">v1.4.7</span>
+        <span className="dash-footer-version">v1.4.8</span>
       </div>
     </div>
   )

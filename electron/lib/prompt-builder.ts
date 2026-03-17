@@ -153,9 +153,18 @@ export function buildUserMessage(
   question: string,
   contextWindow: string,
   _type: QuestionType,
-  candidateName?: string
+  candidateName?: string,
+  answerHistory?: { question: string; answer: string }[]
 ): string {
   const parts: string[] = []
+
+  // Previous Q&A pairs — gives the AI memory of what it already said in this interview
+  if (answerHistory && answerHistory.length > 0) {
+    const historyText = answerHistory
+      .map((h) => `Q: ${h.question}\nA: ${h.answer.substring(0, 600)}`)
+      .join('\n\n')
+    parts.push(`PREVIOUS ANSWERS IN THIS INTERVIEW (maintain consistency):\n${historyText}`)
+  }
 
   if (contextWindow) {
     parts.push(`INTERVIEWER CONTEXT (recent conversation):\n${contextWindow.substring(0, 2000)}`)
@@ -163,7 +172,7 @@ export function buildUserMessage(
 
   parts.push(`QUESTION:\n${question}`)
   const name = candidateName ? `${candidateName}` : 'the candidate'
-  parts.push(`INSTRUCTION: Answer in first person as ${name} speaking directly to the interviewer. Use "I", "my", "we".`)
+  parts.push(`INSTRUCTION: Answer in first person as ${name} speaking directly to the interviewer. Use "I", "my", "we". If this is a follow-up to a previous answer, continue that same story with consistent details.`)
 
   return parts.join('\n\n')
 }

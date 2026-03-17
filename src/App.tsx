@@ -4,6 +4,7 @@ import Dashboard from './components/Dashboard'
 import LoginPage from './components/LoginPage'
 import SetupWizard, { SessionConfig } from './components/SetupWizard'
 import MockInterviewSetup from './components/MockInterviewSetup'
+import OnlineTestSetup from './components/OnlineTestSetup'
 import PastSessions from './components/PastSessions'
 import Tutorial from './components/Tutorial'
 import UpdateBanner from './components/UpdateBanner'
@@ -13,7 +14,7 @@ import AnswerPanel from './components/AnswerPanel'
 import AudioCapture from './components/AudioCapture'
 import './index.css'
 
-type View = 'dashboard' | 'setup' | 'mock-interview' | 'past-sessions' | 'session'
+type View = 'dashboard' | 'setup' | 'mock-interview' | 'past-sessions' | 'session' | 'online-test'
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -27,6 +28,7 @@ export default function App() {
   const [sessionActive, setSessionActive] = useState(false)
   const [isStarted, setIsStarted] = useState(false)
   const [micActive, setMicActive] = useState(true)
+  const [isOnlineTest, setIsOnlineTest] = useState(false)
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null)
   const [convState, setConvState] = useState<string>('IDLE')
   const [isDocked, setIsDocked] = useState(false)
@@ -117,12 +119,22 @@ export default function App() {
     setMicActive(true)
   }
 
+  const handleCreateOnlineTest = (testType: string) => {
+    setView('session')
+    window.electronAPI?.startSession({ testType })
+    setSessionActive(true)
+    setIsStarted(true) // auto-start — no intro needed
+    setMicActive(false) // no mic for online tests
+    setIsOnlineTest(true)
+  }
+
   const handleStartSession = () => setIsStarted(true)
 
   const handleStop = () => {
     window.electronAPI?.stopSession()
     setSessionActive(false)
     setIsStarted(false)
+    setIsOnlineTest(false)
     setView('dashboard')
     if (isDocked) {
       setIsDocked(false)
@@ -147,7 +159,7 @@ export default function App() {
   }
 
   // Docked non-session views
-  if (isDocked && (view === 'setup' || view === 'dashboard' || view === 'mock-interview')) {
+  if (isDocked && (view === 'setup' || view === 'dashboard' || view === 'mock-interview' || view === 'online-test')) {
     return (
       <div className="app-root docked">
         <div className="docked-content" onClick={() => {
@@ -168,6 +180,7 @@ export default function App() {
           onNewSession={() => setView('setup')}
           onPastSessions={() => setView('past-sessions')}
           onMockInterview={() => setView('mock-interview')}
+          onOnlineTest={() => setView('online-test')}
           onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
           user={user}
           onLogout={handleLogout}
@@ -198,6 +211,18 @@ export default function App() {
           onBack={() => setView('dashboard')}
           onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
           cvs={cvs}
+        />
+      </div>
+    )
+  }
+
+  if (view === 'online-test') {
+    return (
+      <div className="app-root">
+        <OnlineTestSetup
+          onStart={handleCreateOnlineTest}
+          onBack={() => setView('dashboard')}
+          onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
         />
       </div>
     )
@@ -250,6 +275,7 @@ export default function App() {
           onToggleDock={toggleDock}
           convState={convState}
           isPremium={user?.is_premium ?? false}
+          isOnlineTest={isOnlineTest}
         />
 
         <div className="panels" ref={panelsRef}>

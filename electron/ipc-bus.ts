@@ -74,6 +74,14 @@ export class IpcBus extends EventEmitter {
       }
     })
 
+    // Screen analysis card — creates answer card in renderer WITHOUT triggering context-builder
+    this.on('screen:card', (question: string, type: string) => {
+      if (this.overlayWindow && !this.overlayWindow.isDestroyed()) {
+        this.overlayWindow.webContents.send('question:detected', question, type)
+        this.overlayWindow.showInactive()
+      }
+    })
+
     // Compound question update → overlay (replaces last generating answer)
     this.on('question:update', (question: string, type: string) => {
       if (this.overlayWindow && !this.overlayWindow.isDestroyed()) {
@@ -167,4 +175,5 @@ export interface SessionConfig {
   autoGenerate?: boolean
   jobUrl?: string
   userId?: string
+  testType?: string  // 'english' | 'coding' | 'ai-ml' | 'numerical' | 'technical' | 'onboarding'
 }

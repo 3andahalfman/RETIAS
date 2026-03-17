@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAudioDevices: () => ipcRenderer.invoke('get-audio-devices'),
   getDesktopSources: () => ipcRenderer.invoke('get-desktop-sources'),
   analyseScreen: () => ipcRenderer.invoke('screen:analyse'),
+  captureScreen: (): Promise<string> => ipcRenderer.invoke('screen:capture'),
+  analyseScreens: (images: string[]): Promise<void> => ipcRenderer.invoke('screen:analyse-multi', images),
   sendAudioChunk: (buffer: ArrayBuffer, sampleRate: number, source: 'mic' | 'system') =>
     ipcRenderer.send('audio:chunk', buffer, sampleRate, source),
 
