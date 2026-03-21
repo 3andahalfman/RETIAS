@@ -24,9 +24,10 @@ interface Props {
   onDock: () => void
   user: User
   onLogout: () => void
+  onCvsChange?: () => void
 }
 
-export default function Dashboard({ onNewSession, onPastSessions, onMockInterview, onOnlineTest, onDock, user, onLogout }: Props) {
+export default function Dashboard({ onNewSession, onPastSessions, onMockInterview, onOnlineTest, onDock, user, onLogout, onCvsChange }: Props) {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
   const [showSnapGrid, setShowSnapGrid] = useState(false)
   const [cvs, setCvs] = useState<CV[]>([])
@@ -81,6 +82,7 @@ export default function Dashboard({ onNewSession, onPastSessions, onMockIntervie
       const name = file.name.replace(/\.[^/.]+$/, '') // strip extension
       await window.electronAPI?.saveCv(name, text)
       await loadCvs()
+      onCvsChange?.()
     } catch (err: any) {
       setCvError(err?.message ?? 'Upload failed')
     } finally {
@@ -92,6 +94,7 @@ export default function Dashboard({ onNewSession, onPastSessions, onMockIntervie
   const handleDeleteCv = async (cvId: string) => {
     await window.electronAPI?.deleteCv(cvId)
     await loadCvs()
+    onCvsChange?.()
   }
 
   function formatDate(ts: number) {

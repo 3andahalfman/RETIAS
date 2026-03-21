@@ -78,6 +78,10 @@ export default function App() {
     window.electronAPI?.listCvs().then((list) => setCvs(list ?? [])).catch(() => {})
   }, [user])
 
+  const refreshCvs = () => {
+    window.electronAPI?.listCvs().then((list) => setCvs(list ?? [])).catch(() => {})
+  }
+
   // Listen to deep question detector state
   useEffect(() => {
     window.electronAPI?.onConvState((state) => {
@@ -184,6 +188,7 @@ export default function App() {
           onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
           user={user}
           onLogout={handleLogout}
+          onCvsChange={refreshCvs}
         />
         {showTutorial && <Tutorial onDone={() => setShowTutorial(false)} />}
       </div>

@@ -749,6 +749,23 @@ html, body, #root {
   margin: 6px 0;
 }
 .answer-text pre code { background: none; padding: 0; }
+
+/* Syntax-highlighted code blocks (react-syntax-highlighter) */
+.answer-code-block {
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  margin: 8px 0 !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+}
+
+/* Inline code spans */
+.answer-inline-code {
+  background: rgba(255,255,255,0.08);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.9em;
+  font-family: 'Fira Mono', 'Consolas', monospace;
+}
 .answer-text h1, .answer-text h2, .answer-text h3 {
   font-size: 14px;
   font-weight: 600;

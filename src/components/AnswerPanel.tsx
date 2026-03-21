@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import 'katex/dist/katex.min.css'
 
 interface AnswerEntry {
@@ -183,7 +185,32 @@ export default function AnswerPanel() {
               <div className="answer-body">
                 <div className="answer-label"><span>⭐</span> Answer</div>
                 <div className="answer-text">
-                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{current.answer}</ReactMarkdown>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                    components={{
+                      code({ node, className, children, ...props }: any) {
+                        const match = /language-(\w+)/.exec(className || '')
+                        const isBlock = !props.inline && match
+                        return isBlock ? (
+                          <SyntaxHighlighter
+                            style={oneDark}
+                            language={match[1]}
+                            PreTag="div"
+                            className="answer-code-block"
+                          >
+                            {String(children).replace(/\n$/, '')}
+                          </SyntaxHighlighter>
+                        ) : (
+                          <code className="answer-inline-code" {...props}>
+                            {children}
+                          </code>
+                        )
+                      },
+                    }}
+                  >
+                    {current.answer}
+                  </ReactMarkdown>
                   {current.generating && <span className="answer-cursor">▌</span>}
                 </div>
               </div>
