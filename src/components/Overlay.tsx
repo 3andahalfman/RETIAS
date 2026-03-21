@@ -11,7 +11,7 @@ const TYPE_LABELS: Record<QuestionType, string> = {
 }
 
 const TYPE_COLORS: Record<QuestionType, string> = {
-  behavioral: '#a78bfa',
+  behavioral: '#60a5fa',
   'system-design': '#38bdf8',
   technical: '#34d399',
   coding: '#fb923c',
