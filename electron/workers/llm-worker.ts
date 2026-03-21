@@ -108,7 +108,7 @@ export class LLMWorker {
     if (!apiKey || apiKey === 'your_anthropic_api_key_here') {
       console.error('[LLMWorker] ❌ ANTHROPIC_API_KEY is missing or placeholder!')
     } else {
-      console.log(`[LLMWorker] ✅ API key loaded (sk-ant-...${apiKey.slice(-6)})`)
+      console.log('[LLMWorker] ✅ API key loaded')
     }
 
     this.client = new Anthropic({ apiKey })

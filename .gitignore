@@ -2,6 +2,7 @@ node_modules/
 dist/
 release/
 .env
+electron/_env_generated.ts
 *.db
 *.log
 .DS_Store

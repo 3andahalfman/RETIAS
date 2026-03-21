@@ -139,7 +139,9 @@ Only respond to explicit or clearly implicit questions. Treat interviewer statem
     prompt += `\n\nCRITICAL: Respond entirely in ${language}.`
   }
   if (extraContext) {
-    prompt += `\n\nEXTRA INSTRUCTIONS:\n${extraContext}`
+    // Truncate to prevent prompt injection via oversized or adversarial input
+    const sanitized = extraContext.substring(0, 2000)
+    prompt += `\n\nEXTRA INSTRUCTIONS:\n${sanitized}`
   }
 
   return prompt

@@ -5,11 +5,16 @@ import { IpcBus } from './ipc-bus.js'
 import dotenv from 'dotenv'
 import { join } from 'node:path'
 
-// In packaged app, .env lives in resourcesPath; in dev it's at the project root
-const dotenvPath = app.isPackaged
-  ? join(process.resourcesPath, '.env')
-  : join(__dirname, '../../.env')
-dotenv.config({ path: dotenvPath })
+// In dev, load .env from project root for convenience
+if (!app.isPackaged) {
+  dotenv.config({ path: join(__dirname, '../../.env') })
+}
+// In packaged builds, secrets are baked in at build time via _env_generated.ts
+// (imported below) rather than shipped as a readable .env file
+import { ENV as _baked } from './_env_generated.js'
+for (const [k, v] of Object.entries(_baked)) {
+  if (!process.env[k] && v) process.env[k] = v
+}
 
 const isDev = process.env.NODE_ENV === 'development'
 
@@ -94,9 +99,16 @@ async function bootstrap() {
   })
 
   // Audio chunks from renderer
+  const MAX_AUDIO_CHUNK_BYTES = 512 * 1024 // 512 KB per chunk — rejects unexpectedly large payloads
   let micChunkCount = 0
   let sysChunkCount = 0
   ipcMain.on('audio:chunk', (_event, data: ArrayBuffer | Buffer, sampleRate: number, source: 'mic' | 'system' = 'mic') => {
+    const byteLength = data instanceof ArrayBuffer ? data.byteLength : (Buffer.isBuffer(data) ? data.byteLength : 0)
+    if (byteLength > MAX_AUDIO_CHUNK_BYTES) {
+      console.warn(`[audio:chunk] Oversized chunk rejected (${byteLength} bytes)`)
+      return
+    }
+
     let int16: Int16Array
     if (data instanceof ArrayBuffer) {
       int16 = new Int16Array(data)
@@ -311,9 +323,18 @@ async function bootstrap() {
     }
   })
 
-  // Open URL in system default browser
+  // Open URL in system default browser — only http/https allowed
   ipcMain.on('open-external', (_event, url: string) => {
-    shell.openExternal(url).catch(console.error)
+    try {
+      const parsed = new URL(url)
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        console.warn('[openExternal] Blocked non-http URL:', parsed.protocol)
+        return
+      }
+      shell.openExternal(url).catch(console.error)
+    } catch {
+      console.warn('[openExternal] Invalid URL blocked')
+    }
   })
 
   // ── Auto-updater ────────────────────────────────────────────────────────────
@@ -357,6 +378,16 @@ async function bootstrap() {
 
   // Extract plain text from PDF or DOCX file buffers
   ipcMain.handle('extract-resume-text', async (_event, buffer: ArrayBuffer, filename: string) => {
+    // Validate filename — only allow safe resume file types, no path traversal
+    const safeName = String(filename).replace(/\\/g, '/').split('/').pop() ?? ''
+    const ext = safeName.split('.').pop()?.toLowerCase() ?? ''
+    if (!['pdf', 'docx', 'doc'].includes(ext)) {
+      return 'ERROR: Unsupported file type. Only PDF and DOCX files are accepted.'
+    }
+    if (buffer.byteLength > 10 * 1024 * 1024) {
+      return 'ERROR: File too large. Maximum size is 10 MB.'
+    }
+
     // pdfjs-dist (used by pdf-parse) requires DOMMatrix which doesn't exist in Node.js
     if (typeof (globalThis as any).DOMMatrix === 'undefined') {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -410,9 +441,15 @@ async function bootstrap() {
     }
   })
 
-  // Job post scraping
+  // Job post scraping — only http/https URLs accepted
   ipcMain.handle('scrape-job-url', async (_event, url: string) => {
     try {
+      const { URL: URLCheck } = await import('url')
+      const parsedCheck = new URLCheck(url)
+      if (parsedCheck.protocol !== 'https:' && parsedCheck.protocol !== 'http:') {
+        return { success: false, error: 'Only HTTP/HTTPS URLs are allowed' }
+      }
+
       const https = await import('https')
       const http = await import('http')
       const { URL } = await import('url')

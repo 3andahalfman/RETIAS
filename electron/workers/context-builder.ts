@@ -158,7 +158,9 @@ Use the candidate's resume context when relevant. Be specific — no filler phra
       prompt += `\n\nCRITICAL: Respond entirely in ${config.language}.`
     }
     if (config?.extraContext) {
-      prompt += `\n\nEXTRA INSTRUCTIONS:\n${config.extraContext}`
+      // Truncate to prevent prompt injection via oversized or adversarial input
+      const sanitized = config.extraContext.substring(0, 2000)
+      prompt += `\n\nEXTRA INSTRUCTIONS:\n${sanitized}`
     }
 
     return prompt
