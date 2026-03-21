@@ -1,6 +1,8 @@
 // Global type declarations for the Electron contextBridge API
 // exposed via preload.ts
 
+declare const __APP_VERSION__: string
+
 interface SessionConfig {
   micDeviceId?: string
   loopbackDeviceId?: string

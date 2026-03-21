@@ -24,6 +24,21 @@ export default function LoginPage({ onLogin }: Props) {
 
   const clearError = () => setError('')
 
+  const friendlyAuthError = (err: any): string => {
+    const msg: string = (err?.message ?? '').toLowerCase()
+    if (msg.includes('invalid login') || msg.includes('invalid credentials') || msg.includes('email not confirmed') || msg.includes('wrong password'))
+      return 'Wrong email or password. Please try again.'
+    if (msg.includes('user already registered') || msg.includes('already exists'))
+      return 'An account with this email already exists. Try signing in.'
+    if (msg.includes('email') && msg.includes('not found'))
+      return 'No account found with this email.'
+    if (msg.includes('rate limit') || msg.includes('too many'))
+      return 'Too many attempts. Please wait a moment and try again.'
+    if (msg.includes('network') || msg.includes('fetch'))
+      return 'Network error. Please check your connection.'
+    return err?.message ?? 'Something went wrong. Please try again.'
+  }
+
   const handleSignIn = async () => {
     if (!email.trim()) { setError('Please enter your email.'); return }
     if (!password) { setError('Please enter your password.'); return }
@@ -33,7 +48,7 @@ export default function LoginPage({ onLogin }: Props) {
       const user = await window.electronAPI!.authLogin(email.trim(), password)
       onLogin(user)
     } catch (err: any) {
-      setError(err?.message ?? 'Sign in failed')
+      setError(friendlyAuthError(err))
     } finally {
       setLoading(false)
     }
@@ -49,7 +64,7 @@ export default function LoginPage({ onLogin }: Props) {
       const user = await window.electronAPI!.authRegister(email.trim(), password, displayName.trim())
       onLogin(user)
     } catch (err: any) {
-      setError(err?.message ?? 'Registration failed')
+      setError(friendlyAuthError(err))
     } finally {
       setLoading(false)
     }
@@ -62,7 +77,7 @@ export default function LoginPage({ onLogin }: Props) {
       const user = await window.electronAPI!.authGoogle()
       onLogin(user)
     } catch (err: any) {
-      setError(err?.message ?? 'Google sign-in failed')
+      setError(friendlyAuthError(err))
     } finally {
       setLoading(false)
     }

@@ -24,7 +24,7 @@
   /* ── Borders ── */
   --border:          rgba(255, 255, 255, 0.10);
   --border-light:    rgba(255, 255, 255, 0.18);
-  --border-focus:    rgba(139, 92, 246, 0.70);
+  --border-focus:    rgba(59, 130, 246, 0.70);
   --border-specular: rgba(255, 255, 255, 0.30);
 
   /* ── Text ── */
@@ -36,8 +36,8 @@
   --accent:             #3b82f6;
   --accent-hover:       #2563eb;
   --accent-glow:        rgba(59, 130, 246, 0.35);
-  --accent-green:       #34d399;
-  --accent-green-glow:  rgba(52, 211, 153, 0.30);
+  --accent-green:       #fb923c;
+  --accent-green-glow:  rgba(251, 146, 60, 0.30);
   --danger:             #f87171;
   --danger-glow:        rgba(248, 113, 113, 0.25);
 
@@ -1713,7 +1713,7 @@ html, body, #root {
   border: 1px solid var(--border-light);
   box-shadow: var(--shadow-glass),
               inset 0 1px 0 var(--border-specular),
-              0 0 24px rgba(124,111,247,0.15);
+              0 0 24px rgba(59,130,246,0.15);
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -1727,7 +1727,7 @@ html, body, #root {
   position: absolute;
   inset: -6px;
   border-radius: var(--radius-pill);
-  background: radial-gradient(circle, rgba(52,211,153,0.45) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(251,146,60,0.45) 0%, transparent 70%);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.3s;
@@ -1884,14 +1884,14 @@ html, body, #root {
 }
 
 .dash-cta-btn.primary {
-  background: linear-gradient(135deg, rgba(124,111,247,0.25), rgba(96,85,232,0.18));
-  border-color: rgba(124,111,247,0.35);
+  background: linear-gradient(135deg, rgba(59,130,246,0.25), rgba(37,99,235,0.18));
+  border-color: rgba(59,130,246,0.35);
   box-shadow: var(--shadow-glow-accent);
 }
 
 .dash-cta-btn.primary:hover {
-  background: linear-gradient(135deg, rgba(124,111,247,0.38), rgba(96,85,232,0.28));
-  border-color: rgba(124,111,247,0.55);
+  background: linear-gradient(135deg, rgba(59,130,246,0.38), rgba(37,99,235,0.28));
+  border-color: rgba(59,130,246,0.55);
 }
 
 .dash-cta-btn.secondary {
@@ -1907,13 +1907,13 @@ html, body, #root {
 
 .dash-cta-btn.mock {
   background: var(--bg-card);
-  border-color: rgba(124,111,247,0.30);
+  border-color: rgba(59,130,246,0.30);
   color: var(--text-primary);
 }
 
 .dash-cta-btn.mock:hover {
-  background: rgba(124,111,247,0.10);
-  border-color: rgba(124,111,247,0.50);
+  background: rgba(59,130,246,0.10);
+  border-color: rgba(59,130,246,0.50);
 }
 
 /* Online Test & Onboarding CTA */
@@ -2599,7 +2599,7 @@ html, body, #root {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .login-input::placeholder { color: var(--text-muted); }
-.login-input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(139,92,246,0.12); }
+.login-input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(59,130,246,0.12); }
 .login-input.has-toggle { padding-right: 36px; }
 .login-pw-toggle {
   position: absolute;
@@ -2615,11 +2615,11 @@ html, body, #root {
 .login-pw-toggle:hover { color: var(--text-primary); }
 .login-btn-primary {
   width: 100%;
-  background: linear-gradient(135deg, rgba(124,111,247,0.90) 0%, rgba(96,85,232,0.85) 100%);
+  background: linear-gradient(135deg, rgba(59,130,246,0.90) 0%, rgba(37,99,235,0.85) 100%);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   color: #fff;
-  border: 1px solid rgba(124,111,247,0.40);
+  border: 1px solid rgba(59,130,246,0.40);
   border-radius: var(--radius-pill);
   font-size: 14px;
   font-weight: 600;
@@ -2630,7 +2630,7 @@ html, body, #root {
   box-shadow: var(--shadow-glow-accent);
 }
 .login-btn-primary:hover:not(:disabled) {
-  box-shadow: 0 0 28px rgba(124,111,247,0.45), 0 6px 20px rgba(0,0,0,0.35);
+  box-shadow: 0 0 28px rgba(59,130,246,0.45), 0 6px 20px rgba(0,0,0,0.35);
   transform: translateY(-1px);
 }
 .login-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -2905,17 +2905,17 @@ html, body, #root {
   cursor: pointer;
   transition: box-shadow 0.2s, opacity 0.15s;
   white-space: nowrap;
-  box-shadow: 0 0 12px rgba(52,211,153,0.25);
+  box-shadow: 0 0 12px rgba(251,146,60,0.25);
 }
-.capture-btn:hover:not(:disabled) { box-shadow: 0 0 20px rgba(52,211,153,0.45); }
+.capture-btn:hover:not(:disabled) { box-shadow: 0 0 20px rgba(251,146,60,0.45); }
 .capture-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .analyse-screen-btn {
-  background: linear-gradient(135deg, rgba(124,111,247,0.85), rgba(139,92,246,0.75));
+  background: linear-gradient(135deg, rgba(59,130,246,0.85), rgba(37,99,235,0.75));
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   color: #fff;
-  border: 1px solid rgba(124,111,247,0.40);
+  border: 1px solid rgba(59,130,246,0.40);
   font-size: 11px;
   font-weight: 600;
   padding: 3px 10px;
@@ -2923,9 +2923,9 @@ html, body, #root {
   cursor: pointer;
   transition: box-shadow 0.2s, opacity 0.15s;
   white-space: nowrap;
-  box-shadow: 0 0 12px rgba(124,111,247,0.25);
+  box-shadow: 0 0 12px rgba(59,130,246,0.25);
 }
-.analyse-screen-btn:hover:not(:disabled) { box-shadow: 0 0 20px rgba(124,111,247,0.45); }
+.analyse-screen-btn:hover:not(:disabled) { box-shadow: 0 0 20px rgba(59,130,246,0.45); }
 .analyse-screen-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .analyse-screen-btn.locked {
   background: var(--glass-8);
@@ -2941,8 +2941,8 @@ html, body, #root {
 .dash-premium-badge {
   display: inline-flex;
   align-items: center;
-  background: linear-gradient(135deg, rgba(124,111,247,0.90), rgba(139,92,246,0.80));
-  border: 1px solid rgba(124,111,247,0.40);
+  background: linear-gradient(135deg, rgba(59,130,246,0.90), rgba(37,99,235,0.80));
+  border: 1px solid rgba(59,130,246,0.40);
   color: #fff;
   font-size: 10px;
   font-weight: 700;
