@@ -60,6 +60,10 @@ const ROLE_TYPES = [
   { id: 'role:Senior Python Engineer',                 icon: '🐍', label: 'Senior Python Engineer',            desc: 'Python architecture, APIs & best practices' },
   { id: 'role:Statistics Expert with Python',          icon: '📈', label: 'Statistics Expert with Python',     desc: 'Stats, probability & data analysis' },
   { id: 'role:Vibe Coding Web Scraping Expert',        icon: '🕸️', label: 'Vibe Coding Web Scraping Expert',  desc: 'Web scraping, automation & crawling' },
+  { id: 'role:LLM Trainer - Agent Function Call',     icon: '🔧', label: 'LLM Trainer – Agent Function Call', desc: 'LLM training, RLHF, tool use & agent frameworks' },
+  { id: 'role:Data Scientist and Analyst',             icon: '🔍', label: 'Data Scientist / Analyst',          desc: 'EDA, visualisation, insights & business analytics' },
+  { id: 'role:Senior Software Engineer LLM Evaluation', icon: '📏', label: 'Senior SWE – LLM Evaluation',     desc: 'LLM benchmarking, eval frameworks & red-teaming' },
+  { id: 'role:Python and Full-Stack JS Developer',     icon: '🌐', label: 'Python + Full-Stack (JS) Developer', desc: 'Python backend, React/Node.js & REST APIs' },
 ]
 
 export default function OnlineTestSetup({ onStart, onBack, onDock }: Props) {
