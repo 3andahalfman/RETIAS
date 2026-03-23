@@ -130,9 +130,13 @@ export async function addQA(
 }
 
 export async function getSessions(userId?: string): Promise<PastSession[]> {
+  // Require userId — never return data across all users
+  if (!userId) return []
+
   const { data, error } = await supabase
     .from('past_sessions')
     .select('id, company, target_role, started_at, ended_at, qa_count')
+    .eq('user_id', userId)
     .order('started_at', { ascending: false })
     .limit(100)
 
@@ -143,12 +147,16 @@ export async function getSessions(userId?: string): Promise<PastSession[]> {
   return (data ?? []).map(mapSession)
 }
 
-export async function getSessionDetail(sessionId: string): Promise<SessionDetail | null> {
-  const { data: sess, error: sessError } = await supabase
+export async function getSessionDetail(sessionId: string, userId?: string): Promise<SessionDetail | null> {
+  // Build query — if userId is provided, enforce ownership; RLS is the backstop
+  let query = supabase
     .from('past_sessions')
     .select('id, company, target_role, started_at, ended_at, qa_count')
     .eq('id', sessionId)
-    .single()
+
+  if (userId) query = query.eq('user_id', userId)
+
+  const { data: sess, error: sessError } = await query.single()
 
   if (sessError || !sess) return null
 
@@ -186,13 +194,27 @@ export async function getSessionDetail(sessionId: string): Promise<SessionDetail
 }
 
 export async function getDashboardMetrics(userId?: string): Promise<DashboardMetrics> {
+  // Require userId — never aggregate across all users
+  if (!userId) {
+    return { totalSessions: 0, totalQAs: 0, totalTranscriptLines: 0, avgDurationMins: 0, topCompany: null, recentSessions: [] }
+  }
+
   const [sessResult, qaCount, txCount, allSessions] = await Promise.all([
-    supabase.from('past_sessions').select('*', { count: 'exact', head: true }),
-    supabase.from('session_qa').select('*', { count: 'exact', head: true }),
-    supabase.from('session_transcript').select('*', { count: 'exact', head: true }),
+    supabase.from('past_sessions').select('*', { count: 'exact', head: true }).eq('user_id', userId),
+    supabase.from('session_qa')
+      .select('session_id', { count: 'exact', head: true })
+      .in('session_id',
+        (await supabase.from('past_sessions').select('id').eq('user_id', userId)).data?.map((r: any) => r.id) ?? []
+      ),
+    supabase.from('session_transcript')
+      .select('session_id', { count: 'exact', head: true })
+      .in('session_id',
+        (await supabase.from('past_sessions').select('id').eq('user_id', userId)).data?.map((r: any) => r.id) ?? []
+      ),
     supabase
       .from('past_sessions')
       .select('id, company, target_role, started_at, ended_at, qa_count')
+      .eq('user_id', userId)
       .order('started_at', { ascending: false }),
   ])
 
@@ -222,7 +244,9 @@ export async function getDashboardMetrics(userId?: string): Promise<DashboardMet
 }
 
 export async function deleteSession(sessionId: string, userId?: string): Promise<void> {
-  // RLS ensures ownership; CASCADE deletes related qa + transcript rows
-  const { error } = await supabase.from('past_sessions').delete().eq('id', sessionId)
+  // Enforce ownership in query + RLS is the backstop; CASCADE deletes related qa + transcript rows
+  let query = supabase.from('past_sessions').delete().eq('id', sessionId)
+  if (userId) query = query.eq('user_id', userId)
+  const { error } = await query
   if (error) console.error('[session-store] deleteSession error:', error.message)
 }

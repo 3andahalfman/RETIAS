@@ -2,8 +2,21 @@ import { app, BrowserWindow, globalShortcut, ipcMain, clipboard, desktopCapturer
 import { autoUpdater } from 'electron-updater'
 import { createOverlayWindow } from './overlay-window.js'
 import { IpcBus } from './ipc-bus.js'
+import { logger } from './lib/logger.js'
 import dotenv from 'dotenv'
 import { join } from 'node:path'
+
+// ── Global crash / unhandled-rejection handlers ─────────────────────────────
+process.on('uncaughtException', (err) => {
+  logger.error('[Crash] uncaughtException:', err?.stack ?? err?.message ?? String(err))
+  console.error('[Crash] uncaughtException:', err)
+})
+
+process.on('unhandledRejection', (reason) => {
+  const msg = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)
+  logger.error('[Crash] unhandledRejection:', msg)
+  console.error('[Crash] unhandledRejection:', reason)
+})
 
 // In dev, load .env from project root for convenience
 if (!app.isPackaged) {
@@ -22,6 +35,67 @@ let overlayWindow: BrowserWindow | null = null
 let ipcBus: IpcBus
 let currentUserId: string | null = null
 let currentUserIsPremium = false
+
+// ── Auth rate limiting ──────────────────────────────────────────────────────
+// Track failed attempts per email; lock out for LOCKOUT_MS after MAX_FAILS
+const AUTH_MAX_FAILS = 10
+const AUTH_LOCKOUT_MS = 60_000 // 60 seconds
+const authFailMap = new Map<string, { count: number; lockedUntil: number }>()
+
+function checkAuthRateLimit(email: string): void {
+  const key = email.toLowerCase().trim()
+  const entry = authFailMap.get(key)
+  if (entry && Date.now() < entry.lockedUntil) {
+    const secsLeft = Math.ceil((entry.lockedUntil - Date.now()) / 1000)
+    throw new Error(`Too many failed attempts. Please wait ${secsLeft} seconds before trying again.`)
+  }
+}
+
+function recordAuthFailure(email: string): void {
+  const key = email.toLowerCase().trim()
+  const entry = authFailMap.get(key) ?? { count: 0, lockedUntil: 0 }
+  entry.count += 1
+  if (entry.count >= AUTH_MAX_FAILS) {
+    entry.lockedUntil = Date.now() + AUTH_LOCKOUT_MS
+    entry.count = 0 // reset counter so next window starts fresh
+    console.warn(`[AuthRateLimit] ${key} locked out for ${AUTH_LOCKOUT_MS / 1000}s`)
+  }
+  authFailMap.set(key, entry)
+}
+
+function clearAuthFailures(email: string): void {
+  authFailMap.delete(email.toLowerCase().trim())
+}
+
+// ── Input validation ────────────────────────────────────────────────────────
+// Generous limits — only reject clearly malformed / runaway payloads
+const LIMITS = {
+  email:       254,
+  password:    256,
+  displayName: 200,
+  resumeText:  200_000,  // ~150 pages of dense text
+  jobDesc:     100_000,
+  company:     300,
+  targetRole:  300,
+  extraCtx:    50_000,
+  cvName:      200,
+  sessionId:   128,
+  url:         2048,
+}
+
+function clamp(val: unknown, max: number, field: string): string {
+  const s = String(val ?? '').trim()
+  if (s.length > max) {
+    console.warn(`[Validation] ${field} truncated from ${s.length} to ${max} chars`)
+    return s.slice(0, max)
+  }
+  return s
+}
+
+function requireString(val: unknown, field: string): string {
+  if (typeof val !== 'string' || !val.trim()) throw new Error(`${field} is required`)
+  return val.trim()
+}
 
 // Cached screen source — fetched before content protection is enabled so the
 // setDisplayMediaRequestHandler always has a valid video source for the WASAPI
@@ -191,11 +265,21 @@ async function bootstrap() {
   })
 
   ipcMain.on('session:start', (_event, config) => {
+    // Sanitise all free-text fields before they reach the LLM worker
+    const safeConfig = {
+      ...config,
+      resumeText:      clamp(config.resumeText      ?? '', LIMITS.resumeText, 'resumeText'),
+      jobDescription:  clamp(config.jobDescription   ?? '', LIMITS.jobDesc,   'jobDescription'),
+      company:         clamp(config.company           ?? '', LIMITS.company,   'company'),
+      targetRole:      clamp(config.targetRole        ?? '', LIMITS.targetRole,'targetRole'),
+      extraContext:    clamp(config.extraContext       ?? '', LIMITS.extraCtx,  'extraContext'),
+      userId: currentUserId ?? undefined,
+    }
     // Refresh screen source cache at session start in case displays changed since startup
     desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
       if (sources.length > 0) cachedScreenSource = sources[0]
     }).catch(() => { /* keep existing cache */ })
-    ipcBus.startSession({ ...config, userId: currentUserId ?? undefined }).catch(console.error)
+    ipcBus.startSession(safeConfig).catch(console.error)
   })
 
   ipcMain.on('session:stop', () => {
@@ -218,7 +302,7 @@ async function bootstrap() {
 
   ipcMain.handle('get-session-detail', async (_event, sessionId: string) => {
     const { getSessionDetail } = await import('./lib/session-store.js')
-    return getSessionDetail(sessionId)
+    return getSessionDetail(sessionId, currentUserId ?? undefined)
   })
 
   ipcMain.handle('delete-session', async (_event, sessionId: string) => {
@@ -234,19 +318,38 @@ async function bootstrap() {
   // ── Auth handlers ──────────────────────────────────────────────────────────
 
   ipcMain.handle('auth:register', async (_e, email: string, password: string, displayName: string) => {
+    const safeEmail = clamp(requireString(email, 'Email'), LIMITS.email, 'email')
+    const safePassword = clamp(requireString(password, 'Password'), LIMITS.password, 'password')
+    const safeName = clamp(displayName, LIMITS.displayName, 'displayName')
+    checkAuthRateLimit(safeEmail)
     const { createUser } = await import('./lib/auth-store.js')
-    const user = await createUser(email, password, displayName)
-    currentUserId = user.id
-    currentUserIsPremium = user.is_premium
-    return user
+    try {
+      const user = await createUser(safeEmail, safePassword, safeName)
+      clearAuthFailures(safeEmail)
+      currentUserId = user.id
+      currentUserIsPremium = user.is_premium
+      return user
+    } catch (err) {
+      recordAuthFailure(safeEmail)
+      throw err
+    }
   })
 
   ipcMain.handle('auth:login', async (_e, email: string, password: string) => {
+    const safeEmail = clamp(requireString(email, 'Email'), LIMITS.email, 'email')
+    const safePassword = clamp(requireString(password, 'Password'), LIMITS.password, 'password')
+    checkAuthRateLimit(safeEmail)
     const { loginUser } = await import('./lib/auth-store.js')
-    const user = await loginUser(email, password)
-    currentUserId = user.id
-    currentUserIsPremium = user.is_premium
-    return user
+    try {
+      const user = await loginUser(safeEmail, safePassword)
+      clearAuthFailures(safeEmail)
+      currentUserId = user.id
+      currentUserIsPremium = user.is_premium
+      return user
+    } catch (err) {
+      recordAuthFailure(safeEmail)
+      throw err
+    }
   })
 
   ipcMain.handle('auth:google-available', () => {
@@ -287,8 +390,10 @@ async function bootstrap() {
 
   ipcMain.handle('cv:save', async (_e, name: string, content: string) => {
     if (!currentUserId) throw new Error('Not authenticated')
+    const safeName = clamp(requireString(name, 'CV name'), LIMITS.cvName, 'cvName')
+    const safeContent = clamp(content, LIMITS.resumeText, 'cvContent')
     const { saveCV } = await import('./lib/cv-store.js')
-    return saveCV(currentUserId, name, content)
+    return saveCV(currentUserId, safeName, safeContent)
   })
 
   ipcMain.handle('cv:list', async () => {
@@ -305,17 +410,21 @@ async function bootstrap() {
 
   // Context prefetch — called when user clicks "Start Session →" so profile is cached before interview starts
   ipcMain.handle('prefetch-context', async (_event, config: { resumeText?: string; jobDescription?: string; company?: string; extraContext?: string }) => {
+    const resumeText   = clamp(config.resumeText   ?? '', LIMITS.resumeText, 'resumeText')
+    const jobDesc      = clamp(config.jobDescription ?? '', LIMITS.jobDesc,   'jobDescription')
+    const company      = clamp(config.company        ?? '', LIMITS.company,   'company')
+    const extraContext = clamp(config.extraContext    ?? '', LIMITS.extraCtx,  'extraContext')
     try {
       const { makeSessionHash, extractContext } = await import('./lib/context-extractor.js')
       const { storeProfile, loadProfile } = await import('./lib/profile-store.js')
-      const hash = makeSessionHash(config.resumeText || '', config.jobDescription || '', config.company || '', config.extraContext || '')
+      const hash = makeSessionHash(resumeText, jobDesc, company, extraContext)
       const cached = await loadProfile(hash)
       if (cached) {
         console.log('[Prefetch] Context already cached:', hash.slice(0, 8))
         return
       }
       console.log('[Prefetch] Extracting context in background...')
-      const ctx = await extractContext(config.resumeText || '', config.jobDescription || '', config.company || '', config.extraContext || '')
+      const ctx = await extractContext(resumeText, jobDesc, company, extraContext)
       await storeProfile(hash, ctx)
       console.log('[Prefetch] Context cached:', hash.slice(0, 8))
     } catch (err: any) {
@@ -355,6 +464,7 @@ async function bootstrap() {
     })
 
     autoUpdater.on('error', (err) => {
+      logger.warn('[Updater] Error:', err.message)
       console.warn('[Updater] Error:', err.message)
     })
 
@@ -445,7 +555,8 @@ async function bootstrap() {
   ipcMain.handle('scrape-job-url', async (_event, url: string) => {
     try {
       const { URL: URLCheck } = await import('url')
-      const parsedCheck = new URLCheck(url)
+      const safeUrl = clamp(String(url ?? ''), LIMITS.url, 'url')
+      const parsedCheck = new URLCheck(safeUrl)
       if (parsedCheck.protocol !== 'https:' && parsedCheck.protocol !== 'http:') {
         return { success: false, error: 'Only HTTP/HTTPS URLs are allowed' }
       }
