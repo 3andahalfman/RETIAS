@@ -121,7 +121,7 @@ export default function Toolbar({
 
         <button
           type="button"
-          className={`toolbar-icon-btn ${micActive ? '' : 'muted'}`}
+          className={`toolbar-icon-btn ${micActive ? 'mic-active' : 'muted'}`}
           onClick={onToggleMic}
           title={micActive ? 'Mute microphone' : 'Unmute microphone'}
         >

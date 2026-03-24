@@ -17,32 +17,34 @@ type QuestionType = 'behavioral' | 'system-design' | 'technical' | 'coding' | 'g
 
 // Per-type answer format instructions injected into the system prompt
 const TYPE_INSTRUCTIONS: Record<QuestionType, string> = {
-  behavioral: `\nAnswer using the STAR method as 4 numbered points:
-1. Situation: set the scene with specific context (team, project, or environment)
-2. Task: your specific responsibility or the challenge you faced
-3. Action: 2-3 concrete steps you personally took — be specific
-4. Result: the outcome and what you learned
-Always provide a full, specific story. Never say you lack an example — construct one grounded in your real work context.`,
+  behavioral: `\nAnswer using STAR — 4 short points, 1-2 sentences each:
+1. Situation: specific context (team, project, environment)
+2. Task: your responsibility or the challenge
+3. Action: 2-3 concrete steps you personally took
+4. Result: outcome and what you learned
+Keep the total answer under 200 words. Never refuse — construct a grounded story from your profile.`,
 
-  'system-design': `\nAnswer as 4 numbered points:
-1. Clarify: key requirements and constraints to establish
-2. Scale: estimated load, bottlenecks, and failure modes
-3. Architecture: core components, data flow, and storage choices
-4. Tradeoffs: design decisions, alternatives considered, reliability concerns
-Align recommendations with the company engineering scale and priorities.`,
+  'system-design': `\nAnswer as 4 short points:
+1. Clarify: key requirements and constraints
+2. Scale: load estimates and bottlenecks
+3. Architecture: core components and data flow
+4. Tradeoffs: key decisions and alternatives
+Keep it focused — 150-250 words total. No padding.`,
 
-  technical: `\nAnswer as a step-by-step explanation with a concrete example.
-Include time and space complexity when relevant.
-Reference your own experience where applicable.`,
+  technical: `\nAnswer directly and concisely:
+- One short explanation of the concept
+- One concrete example or code snippet if needed
+- Complexity or tradeoffs only if directly relevant
+Target 100-180 words. Skip anything not directly asked.`,
 
-  coding: `\nAnswer as 4 numbered points:
-1. Approach: algorithm or data structure choice and why
-2. Edge cases: inputs and boundary conditions to handle
-3. Implementation: key logic steps or pseudocode
-4. Complexity: time and space analysis
-Use your known languages and tools.`,
+  coding: `\nAnswer as 4 short points:
+1. Approach: algorithm/data structure and why
+2. Edge cases: key boundary conditions
+3. Implementation: core logic or pseudocode only
+4. Complexity: time and space in one line
+Keep it under 200 words. No unnecessary elaboration.`,
 
-  general: `\nAnswer with 3 to 5 numbered points. Lead with the direct answer, follow with supporting context.`,
+  general: `\nAnswer in 3-4 short sentences. Lead with the direct answer, add only the most relevant supporting detail. Under 120 words.`,
 }
 
 /**
@@ -132,7 +134,7 @@ Speak in first person (I, my, we) as if you are directly answering the interview
 Draw only from the experience, skills, and achievements listed in your profile — do not invent anything not mentioned.
 Only respond to explicit or clearly implicit questions. Treat interviewer statements as context only.`
 
-  let prompt = `${header}\n\n${sections.join('\n\n')}\n\nAnswer Style: ${styleStr}.`
+  let prompt = `${header}\n\n${sections.join('\n\n')}\n\nAnswer Style: ${styleStr}.\n\nCRITICAL: Be concise. Answer only what was asked. Do not pad, over-explain, or volunteer unrequested information.`
   prompt += TYPE_INSTRUCTIONS[type]
 
   if (language) {

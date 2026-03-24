@@ -16,11 +16,15 @@ const MAX_TOKENS = 1200
 
 function getScreenAnalysisPrompt(testType: string | null): string {
   const FORMAT = `
-FORMAT RULES (follow exactly):
-- Never open with pleasantries or clarifying questions. Go straight to the solution.
-- Structure every answer: working/explanation first → final answer clearly labelled at the end.
-- Use LaTeX for all mathematical expressions — inline with $...$ and block with $$...$$
-- Be thorough and precise. Solve every question visible on the screen.`
+
+RESPONSE RULES (follow exactly):
+- Go straight to the answer — no preamble, pleasantries, or restating the question.
+- Be concise and direct. Only include what directly answers the question asked.
+- Do NOT pad with tangential detail, alternative approaches, or extra theory unless explicitly asked.
+- Structure: short working/reasoning → clear final answer. Stop there.
+- Use LaTeX ONLY for equations that require mathematical notation (inline: $...$, block: $$...$$). Use plain text for simple values, units, and labels.
+- Use markdown tables and bullet points only when they genuinely aid clarity.
+- Maximum depth: answer the question at the level it was asked — exam question = exam-length answer.`
 
   switch (testType) {
     case 'english':

@@ -195,7 +195,7 @@ html, body, #root {
 
 /* Muted mic icon */
 .toolbar-icon-btn.muted svg {
-  opacity: 0.5;
+  opacity: 1;
 }
 
 /* Audio bars animation */
@@ -240,8 +240,8 @@ html, body, #root {
   height: 28px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-secondary);
+  background: var(--glass-4);
+  color: var(--text-primary);
   font-size: 13px;
   cursor: pointer;
   display: flex;
@@ -249,6 +249,13 @@ html, body, #root {
   justify-content: center;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
   position: relative;
+}
+
+/* Mic active state — green tint when listening */
+.toolbar-icon-btn.mic-active {
+  color: #4ade80;
+  border-color: rgba(74,222,128,0.30);
+  background: rgba(74,222,128,0.10);
 }
 
 .toolbar-icon-btn:hover {
@@ -266,7 +273,7 @@ html, body, #root {
   box-shadow: 0 0 10px var(--danger-glow);
 }
 
-.toolbar-icon-btn.muted { opacity: 0.5; }
+.toolbar-icon-btn.muted { opacity: 1; color: #f87171; border-color: rgba(248,113,113,0.25); background: rgba(248,113,113,0.10); }
 
 .mic-slash {
   position: absolute;
@@ -571,21 +578,23 @@ html, body, #root {
 }
 
 .panel-action-btn {
-  width: 30px;
-  height: 30px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 15px;
+  min-width: 30px;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--glass-4);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.12s;
+  transition: background 0.12s, border-color 0.12s;
 }
 
-.panel-action-btn:hover { background: var(--bg-hover); }
+.panel-action-btn:hover { background: var(--glass-8); border-color: var(--border-focus); }
 .panel-action-btn:disabled { opacity: 0.3; cursor: default; }
 
 .panel-action-btn.new-answer-hint {
