@@ -111,52 +111,42 @@ export default function Dashboard({ onNewSession, onPastSessions, onMockIntervie
 
   return (
     <div className="dash-root" ref={rootRef}>
-      {/* Topbar */}
-      <div className="setup-topbar">
-        <div className="setup-topbar-left">
-          <img src="./logo.svg" alt="RETIAS" className="setup-logo" />
-          <span className="setup-brand-name">RETIAS</span>
-        </div>
-        <div className="setup-topbar-center">
-          <span className="dash-user-info" title={user.email}>
-            {user.display_name || user.email}
-          </span>
-          {user.is_premium && <span className="dash-premium-badge">✨ PRO</span>}
-        </div>
-        <div className="setup-topbar-right">
-          <div className="snap-btn-wrapper">
-            <button type="button" className="setup-window-btn" title="Snap layout" onClick={() => setShowSnapGrid(!showSnapGrid)}>✥</button>
-            {showSnapGrid && (
-              <div className="snap-grid-dropdown">
-                <div className="snap-grid-row">
-                  <button type="button" className="snap-grid-cell" title="Top Left"    onClick={() => { window.electronAPI?.snapWindow('tl'); setShowSnapGrid(false) }} />
-                  <button type="button" className="snap-grid-cell" title="Top Middle"  onClick={() => { window.electronAPI?.snapWindow('tm'); setShowSnapGrid(false) }} />
-                  <button type="button" className="snap-grid-cell" title="Top Right"   onClick={() => { window.electronAPI?.snapWindow('tr'); setShowSnapGrid(false) }} />
-                </div>
-                <div className="snap-grid-row">
-                  <button type="button" className="snap-grid-cell" title="Bottom Left"   onClick={() => { window.electronAPI?.snapWindow('bl'); setShowSnapGrid(false) }} />
-                  <button type="button" className="snap-grid-cell" title="Bottom Middle" onClick={() => { window.electronAPI?.snapWindow('bm'); setShowSnapGrid(false) }} />
-                  <button type="button" className="snap-grid-cell" title="Bottom Right"  onClick={() => { window.electronAPI?.snapWindow('br'); setShowSnapGrid(false) }} />
-                </div>
+      {/* Window controls — absolute top-right */}
+      <div className="dash-win-controls">
+        <div className="snap-btn-wrapper">
+          <button type="button" className="setup-window-btn" title="Snap layout" onClick={() => setShowSnapGrid(!showSnapGrid)}>✥</button>
+          {showSnapGrid && (
+            <div className="snap-grid-dropdown">
+              <div className="snap-grid-row">
+                <button type="button" className="snap-grid-cell" title="Top Left"    onClick={() => { window.electronAPI?.snapWindow('tl'); setShowSnapGrid(false) }} />
+                <button type="button" className="snap-grid-cell" title="Top Middle"  onClick={() => { window.electronAPI?.snapWindow('tm'); setShowSnapGrid(false) }} />
+                <button type="button" className="snap-grid-cell" title="Top Right"   onClick={() => { window.electronAPI?.snapWindow('tr'); setShowSnapGrid(false) }} />
               </div>
-            )}
-          </div>
-          <button type="button" className="setup-window-btn" title="Dock" onClick={onDock}>↙</button>
-          <button type="button" className="setup-window-btn dash-signout-btn" title="Sign out" onClick={onLogout}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-              <polyline points="16 17 21 12 16 7"/>
-              <line x1="21" y1="12" x2="9" y2="12"/>
-            </svg>
-          </button>
-          <button type="button" className="setup-window-btn close" title="Close" onClick={() => window.electronAPI?.closeWindow()}>✕</button>
+              <div className="snap-grid-row">
+                <button type="button" className="snap-grid-cell" title="Bottom Left"   onClick={() => { window.electronAPI?.snapWindow('bl'); setShowSnapGrid(false) }} />
+                <button type="button" className="snap-grid-cell" title="Bottom Middle" onClick={() => { window.electronAPI?.snapWindow('bm'); setShowSnapGrid(false) }} />
+                <button type="button" className="snap-grid-cell" title="Bottom Right"  onClick={() => { window.electronAPI?.snapWindow('br'); setShowSnapGrid(false) }} />
+              </div>
+            </div>
+          )}
         </div>
+        <button type="button" className="setup-window-btn" title="Dock" onClick={onDock}>↙</button>
+        <button type="button" className="setup-window-btn dash-signout-btn" title="Sign out" onClick={onLogout}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </button>
+        <button type="button" className="setup-window-btn close" title="Close" onClick={() => window.electronAPI?.closeWindow()}>✕</button>
       </div>
 
       {/* Hero */}
       <div className="dash-hero">
-        <div className="dash-hero-title">Real Time Interview Assistant</div>
-        <div className="dash-hero-sub">AI-powered real-time coaching for your interviews</div>
+        <div className="dash-hero-title">
+          Good morning, {user.display_name?.split(' ')[0] || user.email?.split('@')[0] || 'there'} 👋
+        </div>
+        <div className="dash-hero-sub">Ready for your next interview? Let's get started.</div>
       </div>
 
       {/* CTA buttons */}

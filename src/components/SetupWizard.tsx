@@ -158,14 +158,16 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [] 
       {validationMsg && <ValidationModal message={validationMsg} onClose={() => setValidationMsg('')} />}
       <div className="setup-root" ref={rootRef}>
 
-        {/* Topbar */}
-        <div className="setup-topbar">
-          <div className="setup-topbar-left">
-            <img src="./logo.svg" alt="RETIAS" className="setup-logo" />
-            <span className="setup-brand-name">RETIAS</span>
+        {/* Inner topbar — breadcrumb + window controls */}
+        <div className="setup-inner-topbar">
+          <div className="setup-inner-topbar-left">
+            {onBack && (
+              <button type="button" className="setup-breadcrumb-btn" onClick={onBack}>
+                ← Back to Dashboard
+              </button>
+            )}
           </div>
-          <div className="setup-topbar-center" />
-          <div className="setup-topbar-right">
+          <div className="setup-inner-topbar-right">
             <div className="snap-btn-wrapper">
               <button type="button" className="setup-window-btn" title="Snap layout" onClick={() => setShowSnapGrid(!showSnapGrid)}>✥</button>
               {showSnapGrid && (
@@ -189,239 +191,240 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [] 
         </div>
 
         {/* New Session form */}
-        {(
-          <div className="setup-body">
+        <div className="setup-body">
 
-            {/* ── Step 1 ── */}
-            {step === 1 && (
-              <>
-                <div className="setup-type-row">
-                  <button type="button" className="setup-type-btn active">🏢 Interview</button>
-                </div>
+          {/* ── Step 1 ── */}
+          {step === 1 && (
+            <>
+              <div className="setup-type-row">
+                <button type="button" className="setup-type-btn active">🏢 Interview</button>
+              </div>
 
-                {/* Job URL */}
-                <div className="setup-field">
-                  <label className="setup-label" htmlFor="job-url">
-                    Job Post URL <span className="setup-label-sub">(Optional — click Scrape to auto-fill)</span>
-                  </label>
-                  <div className="setup-url-row">
-                    <input
-                      id="job-url"
-                      className="setup-input"
-                      placeholder="https://company.com/jobs/123"
-                      value={jobUrl}
-                      onChange={(e) => setJobUrl(e.target.value)}
-                    />
-                    <button type="button" className="scrape-btn" onClick={handleScrape} disabled={scraping}>
-                      {scraping ? '⏳ Scraping...' : '⬇ Scrape & Fill'}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="setup-divider">or input manually</div>
-
-                {/* Company */}
-                <div className="setup-field">
-                  <label className="setup-label" htmlFor="company">🏢 Company</label>
-                  <input id="company" className="setup-input" placeholder="Microsoft..." value={company} onChange={(e) => setCompany(e.target.value)} />
-                </div>
-
-                {/* Target Role */}
-                <div className="setup-field">
-                  <label className="setup-label" htmlFor="target-role">🎯 Target Role <span className="setup-label-sub">(Optional — type or pick a preset)</span></label>
+              {/* Job URL */}
+              <div className="setup-field">
+                <label className="setup-label" htmlFor="job-url">
+                  Job Post URL <span className="setup-label-sub">(Optional — click Scrape to auto-fill)</span>
+                </label>
+                <div className="setup-url-row">
                   <input
-                    id="target-role"
+                    id="job-url"
                     className="setup-input"
-                    list="role-presets"
-                    placeholder="e.g. Senior Python Engineer"
-                    value={targetRole}
-                    onChange={(e) => setTargetRole(e.target.value)}
+                    placeholder="https://company.com/jobs/123"
+                    value={jobUrl}
+                    onChange={(e) => setJobUrl(e.target.value)}
                   />
-                  <datalist id="role-presets">
-                    {ROLE_PRESETS.map((r) => <option key={r} value={r} />)}
-                  </datalist>
+                  <button type="button" className="scrape-btn" onClick={handleScrape} disabled={scraping}>
+                    {scraping ? '⏳ Scraping...' : '⬇ Scrape & Fill'}
+                  </button>
                 </div>
+              </div>
 
-                {/* Job Description */}
-                <div className="setup-field">
-                  <label className="setup-label" htmlFor="job-desc">
-                    📋 Job Description <span className="setup-jd-required">*</span>
-                  </label>
-                  <textarea
-                    id="job-desc"
-                    className="setup-textarea"
-                    placeholder="Software Engineer versed in Python, SQL, and AWS..."
-                    value={jobDescription}
-                    onChange={(e) => setJobDescription(e.target.value)}
-                    rows={3}
-                  />
-                </div>
+              <div className="setup-divider">or input manually</div>
 
-                {/* Resume */}
-                <div className="setup-field">
-                  <label className="setup-label" htmlFor="resume-text">
-                    📎 Resume <span className="setup-jd-required">*</span>
-                  </label>
-                  {cvs.length > 0 && (
-                    <div className="cv-picker-row">
-                      <span className="cv-picker-label">Use saved CV:</span>
-                      <select
-                        className="cv-picker-select"
-                        title="Select a saved CV"
-                        defaultValue=""
-                        onChange={(e) => {
-                          const cv = cvs.find(c => c.id === e.target.value)
-                          if (cv) { setResumeText(cv.content); setResumeFileName(cv.name) }
-                        }}
-                      >
-                        <option value="">— pick a CV —</option>
-                        {cvs.map(cv => <option key={cv.id} value={cv.id}>{cv.name}</option>)}
-                      </select>
-                    </div>
-                  )}
-                  {!resumeFileName && (
-                    <textarea
-                      id="resume-text"
-                      className="setup-textarea setup-textarea-resume"
-                      placeholder="Paste your resume text here..."
-                      value={resumeText}
-                      onChange={(e) => setResumeText(e.target.value)}
-                      rows={2}
-                    />
-                  )}
-                  <div className="setup-file-select-wrapper">
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      className="setup-file-input-hidden"
-                      accept=".txt,.md,.pdf,.docx"
-                      title="Upload resume file"
-                      onChange={handleFileUpload}
-                    />
-                    <div className="setup-file-select" onClick={() => fileInputRef.current?.click()}>
-                      <span>{resumeFileName || 'Or Choose File...'}</span>
-                      <span>⌄</span>
-                    </div>
-                    {resumeFileName && <button type="button" className="clear-file-btn" onClick={clearFile}>✕</button>}
-                  </div>
-                </div>
+              {/* Company */}
+              <div className="setup-field">
+                <label className="setup-label" htmlFor="company">🏢 Company</label>
+                <input id="company" className="setup-input" placeholder="Microsoft..." value={company} onChange={(e) => setCompany(e.target.value)} />
+              </div>
 
-                <div className="setup-footer">
-                  {onBack && (
-                    <button type="button" className="setup-btn secondary" onClick={onBack}>Back to Dashboard</button>
-                  )}
-                  <button type="button" className="setup-btn primary" onClick={() => {
-                    if (!jobDescription.trim()) { setValidationMsg('Please provide a Job Description to proceed.'); return }
-                    if (!resumeText.trim()) { setValidationMsg('Please provide a Resume to proceed.'); return }
-                    // Pre-warm context extraction so first answer is fast
-                    window.electronAPI?.prefetchContext({ resumeText, jobDescription, company, extraContext })
-                    setStep(2)
-                  }}>Next →</button>
-                </div>
-              </>
-            )}
+              {/* Target Role */}
+              <div className="setup-field">
+                <label className="setup-label" htmlFor="target-role">🎯 Target Role <span className="setup-label-sub">(Optional — type or pick a preset)</span></label>
+                <input
+                  id="target-role"
+                  className="setup-input"
+                  list="role-presets"
+                  placeholder="e.g. Senior Python Engineer"
+                  value={targetRole}
+                  onChange={(e) => setTargetRole(e.target.value)}
+                />
+                <datalist id="role-presets">
+                  {ROLE_PRESETS.map((r) => <option key={r} value={r} />)}
+                </datalist>
+              </div>
 
-            {/* ── Step 2 ── */}
-            {step === 2 && (
-              <>
-                {/* Language */}
-                <div className="setup-lang-row">
-                  <div className="setup-field setup-lang-field">
-                    <label className="setup-label" htmlFor="language">🌐 Language</label>
+              {/* Job Description */}
+              <div className="setup-field">
+                <label className="setup-label" htmlFor="job-desc">
+                  📋 Job Description <span className="setup-jd-required">*</span>
+                </label>
+                <textarea
+                  id="job-desc"
+                  className="setup-textarea"
+                  placeholder="Software Engineer versed in Python, SQL, and AWS..."
+                  value={jobDescription}
+                  onChange={(e) => setJobDescription(e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              {/* Resume */}
+              <div className="setup-field">
+                <label className="setup-label" htmlFor="resume-text">
+                  📎 Resume <span className="setup-jd-required">*</span>
+                </label>
+                {cvs.length > 0 && (
+                  <div className="cv-picker-row">
+                    <span className="cv-picker-label">Use saved CV:</span>
                     <select
-                      id="language"
-                      className="setup-select"
-                      title="Response language"
-                      value={language}
-                      onChange={(e) => setLanguage(e.target.value)}
+                      className="cv-picker-select"
+                      title="Select a saved CV"
+                      defaultValue=""
+                      onChange={(e) => {
+                        const cv = cvs.find(c => c.id === e.target.value)
+                        if (cv) { setResumeText(cv.content); setResumeFileName(cv.name) }
+                      }}
                     >
-                      <option value="English">English</option>
-                      <option value="Spanish">Spanish</option>
-                      <option value="French">French</option>
+                      <option value="">— pick a CV —</option>
+                      {cvs.map(cv => <option key={cv.id} value={cv.id}>{cv.name}</option>)}
                     </select>
                   </div>
-                  <div className="setup-field setup-field-col">
-                    <label className="setup-label" htmlFor="simple-lang">Simple Language</label>
-                    <div className="setup-toggle-row">
-                      <label className="toggle">
-                        <input
-                          id="simple-lang"
-                          type="checkbox"
-                          title="Use simple, easy-to-understand language"
-                          checked={simpleLanguage}
-                          onChange={(e) => setSimpleLanguage(e.target.checked)}
-                        />
-                        <span className="toggle-slider" />
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                {/* AI Model */}
-                <div className="setup-field">
-                  <label className="setup-label" htmlFor="ai-model">🤖 AI Model</label>
-                  <div className="ai-model-select">
-                    <span className="setup-ai-icon">⚛️</span>
-                    <span className="setup-ai-name">
-                      {aiModel === 'claude-sonnet' && 'Claude Sonnet 4.6'}
-                      {aiModel === 'claude-haiku' && 'Claude Haiku 4.5'}
-                    </span>
-                    {aiModel === 'claude-sonnet' && <span className="ai-badge">Recommended</span>}
-                    {aiModel === 'claude-haiku' && <span className="ai-speed">Fast</span>}
-                    <span className="setup-ai-chevron">⌄</span>
-                    <select
-                      id="ai-model"
-                      title="Select AI model"
-                      value={aiModel}
-                      onChange={(e) => setAiModel(e.target.value)}
-                    >
-                      <option value="claude-sonnet">Claude Sonnet 4.6</option>
-                      <option value="claude-haiku">Claude Haiku 4.5</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Extra Context */}
-                <div className="setup-field">
-                  <label className="setup-label" htmlFor="extra-context">📝 Extra Context/Instructions</label>
+                )}
+                {!resumeFileName && (
                   <textarea
-                    id="extra-context"
-                    className="setup-textarea"
-                    placeholder="Be more technical, focus on leadership examples..."
-                    value={extraContext}
-                    onChange={(e) => setExtraContext(e.target.value)}
+                    id="resume-text"
+                    className="setup-textarea setup-textarea-resume"
+                    placeholder="Paste your resume text here..."
+                    value={resumeText}
+                    onChange={(e) => setResumeText(e.target.value)}
                     rows={2}
                   />
+                )}
+                <div className="setup-file-select-wrapper">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="setup-file-input-hidden"
+                    accept=".txt,.md,.pdf,.docx"
+                    title="Upload resume file"
+                    onChange={handleFileUpload}
+                  />
+                  <div className="setup-file-select" onClick={() => fileInputRef.current?.click()}>
+                    <span>{resumeFileName || 'Or Choose File...'}</span>
+                    <span>⌄</span>
+                  </div>
+                  {resumeFileName && <button type="button" className="clear-file-btn" onClick={clearFile}>✕</button>}
                 </div>
+              </div>
+            </>
+          )}
 
-                <div className="setup-divider setup-divider-spaced" />
-
-                {/* Auto Generate */}
-                <div className="setup-field">
-                  <div className="setup-toggle-row setup-auto-row">
-                    <span className="setup-auto-label">Auto Generate AI Response</span>
+          {/* ── Step 2 ── */}
+          {step === 2 && (
+            <>
+              {/* Language */}
+              <div className="setup-lang-row">
+                <div className="setup-field setup-lang-field">
+                  <label className="setup-label" htmlFor="language">🌐 Language</label>
+                  <select
+                    id="language"
+                    className="setup-select"
+                    title="Response language"
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                  >
+                    <option value="English">English</option>
+                    <option value="Spanish">Spanish</option>
+                    <option value="French">French</option>
+                  </select>
+                </div>
+                <div className="setup-field setup-field-col">
+                  <label className="setup-label" htmlFor="simple-lang">Simple Language</label>
+                  <div className="setup-toggle-row">
                     <label className="toggle">
                       <input
+                        id="simple-lang"
                         type="checkbox"
-                        title="Automatically generate AI answers when a question is detected"
-                        checked={autoGenerate}
-                        onChange={(e) => setAutoGenerate(e.target.checked)}
+                        title="Use simple, easy-to-understand language"
+                        checked={simpleLanguage}
+                        onChange={(e) => setSimpleLanguage(e.target.checked)}
                       />
                       <span className="toggle-slider" />
                     </label>
-                    <span className="badge-new">New</span>
                   </div>
-                  <p className="setup-auto-hint">
-                    When enabled, the AI automatically detects questions and generates answers in real time.
-                  </p>
                 </div>
+              </div>
 
-                <div className="setup-footer setup-footer-step2">
-                  <button type="button" className="setup-btn secondary" onClick={() => setStep(1)}>Back</button>
-                  <button type="button" className="setup-btn primary" onClick={handleCreate}>Start Session →</button>
+              {/* AI Model */}
+              <div className="setup-field">
+                <label className="setup-label" htmlFor="ai-model">🤖 AI Model</label>
+                <div className="ai-model-select">
+                  <span className="setup-ai-icon">⚛️</span>
+                  <span className="setup-ai-name">
+                    {aiModel === 'claude-sonnet' && 'Claude Sonnet 4.6'}
+                    {aiModel === 'claude-haiku' && 'Claude Haiku 4.5'}
+                  </span>
+                  {aiModel === 'claude-sonnet' && <span className="ai-badge">Recommended</span>}
+                  {aiModel === 'claude-haiku' && <span className="ai-speed">Fast</span>}
+                  <span className="setup-ai-chevron">⌄</span>
+                  <select
+                    id="ai-model"
+                    title="Select AI model"
+                    value={aiModel}
+                    onChange={(e) => setAiModel(e.target.value)}
+                  >
+                    <option value="claude-sonnet">Claude Sonnet 4.6</option>
+                    <option value="claude-haiku">Claude Haiku 4.5</option>
+                  </select>
                 </div>
-              </>
+              </div>
+
+              {/* Extra Context */}
+              <div className="setup-field">
+                <label className="setup-label" htmlFor="extra-context">📝 Extra Context/Instructions</label>
+                <textarea
+                  id="extra-context"
+                  className="setup-textarea"
+                  placeholder="Be more technical, focus on leadership examples..."
+                  value={extraContext}
+                  onChange={(e) => setExtraContext(e.target.value)}
+                  rows={2}
+                />
+              </div>
+
+              <div className="setup-divider setup-divider-spaced" />
+
+              {/* Auto Generate */}
+              <div className="setup-field">
+                <div className="setup-toggle-row setup-auto-row">
+                  <span className="setup-auto-label">Auto Generate AI Response</span>
+                  <label className="toggle">
+                    <input
+                      type="checkbox"
+                      title="Automatically generate AI answers when a question is detected"
+                      checked={autoGenerate}
+                      onChange={(e) => setAutoGenerate(e.target.checked)}
+                    />
+                    <span className="toggle-slider" />
+                  </label>
+                  <span className="badge-new">New</span>
+                </div>
+                <p className="setup-auto-hint">
+                  When enabled, the AI automatically detects questions and generates answers in real time.
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Pinned footer — outside scroll area */}
+        {step === 1 && (
+          <div className="setup-footer">
+            {onBack && (
+              <button type="button" className="setup-btn secondary" onClick={onBack}>← Back</button>
             )}
+            <button type="button" className="setup-btn primary" onClick={() => {
+              if (!jobDescription.trim()) { setValidationMsg('Please provide a Job Description to proceed.'); return }
+              if (!resumeText.trim()) { setValidationMsg('Please provide a Resume to proceed.'); return }
+              window.electronAPI?.prefetchContext({ resumeText, jobDescription, company, extraContext })
+              setStep(2)
+            }}>Job Details →</button>
+          </div>
+        )}
+        {step === 2 && (
+          <div className="setup-footer">
+            <button type="button" className="setup-btn secondary" onClick={() => setStep(1)}>← Back</button>
+            <button type="button" className="setup-btn primary" onClick={handleCreate}>Start Session →</button>
           </div>
         )}
       </div>

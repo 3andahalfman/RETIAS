@@ -81,14 +81,14 @@ export default function MockInterviewSetup({ onCreateSession, onBack, onDock, cv
 
   return (
     <div className="setup-root mock-root">
-      {/* Topbar */}
-      <div className="setup-topbar">
-        <div className="setup-topbar-left">
-          <img src="./logo.svg" alt="RETIAS" className="setup-logo" />
-          <span className="setup-brand-name">RETIAS</span>
+      {/* Inner topbar — breadcrumb + window controls */}
+      <div className="setup-inner-topbar">
+        <div className="setup-inner-topbar-left">
+          <button type="button" className="setup-breadcrumb-btn" onClick={onBack}>
+            ← Back to Dashboard
+          </button>
         </div>
-        <div className="setup-topbar-center" />
-        <div className="setup-topbar-right">
+        <div className="setup-inner-topbar-right">
           <div className="snap-btn-wrapper">
             <button type="button" className="setup-window-btn" title="Snap layout" onClick={() => setShowSnapGrid(!showSnapGrid)}>✥</button>
             {showSnapGrid && (
@@ -255,7 +255,7 @@ export default function MockInterviewSetup({ onCreateSession, onBack, onDock, cv
       {/* Footer — always visible outside scrollable body */}
       <div className="mock-fixed-footer">
         <button type="button" className="setup-btn secondary" onClick={onBack} disabled={generating}>
-          Back to Dashboard
+          ← Back
         </button>
         {generatedJD && (
           <button
@@ -264,7 +264,7 @@ export default function MockInterviewSetup({ onCreateSession, onBack, onDock, cv
             onClick={handleStart}
             disabled={!editableJD.trim()}
           >
-            🚀 Start Mock Interview
+            Start Mock Interview →
           </button>
         )}
       </div>

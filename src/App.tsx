@@ -9,6 +9,7 @@ import PastSessions from './components/PastSessions'
 import Tutorial from './components/Tutorial'
 import UpdateBanner from './components/UpdateBanner'
 import Toolbar from './components/Toolbar'
+import Sidebar from './components/Sidebar'
 import TranscriptPanel from './components/Transcript'
 import AnswerPanel from './components/AnswerPanel'
 import AudioCapture from './components/AudioCapture'
@@ -191,20 +192,31 @@ export default function App() {
     )
   }
 
+  const handleSidebarNavigate = (item: 'dashboard' | 'sessions' | 'cv-manager' | 'settings') => {
+    if (item === 'sessions') setView('past-sessions')
+    else if (item === 'dashboard') setView('dashboard')
+    // cv-manager and settings: no-op for now
+  }
+
   if (view === 'dashboard') {
     return (
       <div className="app-root">
         <UpdateBanner />
-        <Dashboard
-          onNewSession={() => setView('setup')}
-          onPastSessions={() => setView('past-sessions')}
-          onMockInterview={() => setView('mock-interview')}
-          onOnlineTest={() => setView('online-test')}
-          onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
-          user={user}
-          onLogout={handleLogout}
-          onCvsChange={refreshCvs}
-        />
+        <div className="page-layout">
+          <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} />
+          <div className="page-main">
+            <Dashboard
+              onNewSession={() => setView('setup')}
+              onPastSessions={() => setView('past-sessions')}
+              onMockInterview={() => setView('mock-interview')}
+              onOnlineTest={() => setView('online-test')}
+              onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
+              user={user}
+              onLogout={handleLogout}
+              onCvsChange={refreshCvs}
+            />
+          </div>
+        </div>
         {showTutorial && <Tutorial onDone={() => setShowTutorial(false)} />}
       </div>
     )
@@ -213,12 +225,17 @@ export default function App() {
   if (view === 'mock-interview') {
     return (
       <div className="app-root">
-        <MockInterviewSetup
-          onCreateSession={handleCreateSession}
-          onBack={() => setView('dashboard')}
-          onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
-          cvs={cvs}
-        />
+        <div className="page-layout">
+          <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} />
+          <div className="page-main">
+            <MockInterviewSetup
+              onCreateSession={handleCreateSession}
+              onBack={() => setView('dashboard')}
+              onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
+              cvs={cvs}
+            />
+          </div>
+        </div>
       </div>
     )
   }
@@ -226,12 +243,17 @@ export default function App() {
   if (view === 'setup') {
     return (
       <div className="app-root">
-        <SetupWizard
-          onCreateSession={handleCreateSession}
-          onBack={() => setView('dashboard')}
-          onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
-          cvs={cvs}
-        />
+        <div className="page-layout">
+          <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} />
+          <div className="page-main">
+            <SetupWizard
+              onCreateSession={handleCreateSession}
+              onBack={() => setView('dashboard')}
+              onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
+              cvs={cvs}
+            />
+          </div>
+        </div>
       </div>
     )
   }
@@ -250,14 +272,12 @@ export default function App() {
 
   if (view === 'past-sessions') {
     return (
-      <div className="app-root setup-root setup-root-history">
-        <div className="ps-history-container">
-          <PastSessions />
-        </div>
-        <div className="setup-footer setup-footer-history">
-          <button type="button" className="setup-btn secondary" onClick={() => setView('dashboard')}>
-            Back to Dashboard
-          </button>
+      <div className="app-root">
+        <div className="page-layout">
+          <Sidebar activeItem="sessions" user={user} onNavigate={handleSidebarNavigate} />
+          <div className="page-main">
+            <PastSessions onNewSession={() => setView('setup')} />
+          </div>
         </div>
       </div>
     )
