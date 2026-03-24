@@ -660,8 +660,33 @@ async function bootstrap() {
     }
   })
 
+  ipcMain.on('window:set-opacity', (_event, opacity: number) => {
+    overlayWindow?.setOpacity(Math.max(0.2, Math.min(1, opacity / 100)))
+  })
+
+  ipcMain.on('window:set-always-on-top', (_event, value: boolean) => {
+    if (overlayWindow) {
+      overlayWindow.setAlwaysOnTop(value, 'screen-saver')
+    }
+  })
+
+  ipcMain.handle('app:get-version', () => {
+    return app.getVersion()
+  })
+
+  ipcMain.handle('data:clear-all-sessions', async () => {
+    const { clearAllSessions } = await import('./lib/session-store.js')
+    return clearAllSessions(currentUserId ?? undefined)
+  })
+
+  ipcMain.handle('auth:update-display-name', async (_e, displayName: string) => {
+    if (!currentUserId) return
+    const { updateDisplayName } = await import('./lib/auth-store.js')
+    return updateDisplayName(currentUserId, displayName)
+  })
+
   ipcMain.on('window:minimize', () => {
-    overlayWindow?.hide()
+    overlayWindow?.minimize()
   })
 
   ipcMain.on('window:close', () => {

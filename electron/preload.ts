@@ -48,6 +48,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   regenerateAnswer: () => ipcRenderer.send('answer:regenerate'),
 
   // Window control
+  setWindowOpacity: (opacity: number) => ipcRenderer.send('window:set-opacity', opacity),
+  setAlwaysOnTop: (value: boolean) => ipcRenderer.send('window:set-always-on-top', value),
+  getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version'),
+  clearAllSessions: (): Promise<void> => ipcRenderer.invoke('data:clear-all-sessions'),
+  updateDisplayName: (displayName: string): Promise<void> => ipcRenderer.invoke('auth:update-display-name', displayName),
   dockWindow: () => ipcRenderer.send('window:dock'),
   undockWindow: () => ipcRenderer.send('window:undock'),
   minimizeWindow: () => ipcRenderer.send('window:minimize'),

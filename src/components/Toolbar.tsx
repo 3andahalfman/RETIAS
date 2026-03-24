@@ -11,7 +11,6 @@ interface ToolbarProps {
   onToggleDock: () => void
   convState?: string
   isPremium?: boolean
-  isOnlineTest?: boolean
   sessionCompany?: string
   sessionRole?: string
 }
@@ -26,18 +25,13 @@ export default function Toolbar({
   isDocked,
   onToggleDock,
   convState = 'IDLE',
-  isPremium = false,
-  isOnlineTest = false,
   sessionCompany,
   sessionRole,
 }: ToolbarProps) {
   const [elapsed, setElapsed] = useState(0)
   const [snapOpen, setSnapOpen] = useState(false)
-  const [analysing, setAnalysing] = useState(false)
-  const [captureQueue, setCaptureQueue] = useState<string[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Session timer
   useEffect(() => {
     if (isStarted) {
       setElapsed(0)
@@ -46,153 +40,82 @@ export default function Toolbar({
       if (timerRef.current) clearInterval(timerRef.current)
       timerRef.current = null
     }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current)
-    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [isStarted])
-
-  const handleAnalyseScreen = async () => {
-    if (analysing) return
-    setAnalysing(true)
-    try {
-      await window.electronAPI?.analyseScreen()
-    } finally {
-      setAnalysing(false)
-    }
-  }
-
-  const handleCapture = async () => {
-    if (captureQueue.length >= 5) return
-    try {
-      const base64 = await window.electronAPI?.captureScreen()
-      if (base64) setCaptureQueue(prev => [...prev, base64])
-    } catch {}
-  }
-
-  const handleAnalyseAll = () => {
-    if (captureQueue.length === 0) return
-    window.electronAPI?.analyseScreens(captureQueue)
-    setCaptureQueue([])
-  }
-
-  useEffect(() => {
-    if (!sessionActive) setCaptureQueue([])
-  }, [sessionActive])
 
   const minutes = Math.floor(elapsed / 60)
   const seconds = elapsed % 60
   const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`
 
-  // Truncate role for display
   const displayRole = sessionRole
-    ? sessionRole.length > 40 ? sessionRole.slice(0, 40) + '…' : sessionRole
+    ? (sessionRole.length > 32 ? sessionRole.slice(0, 32) + '…' : sessionRole)
     : null
-
   const sessionLabel = sessionCompany && displayRole
     ? `${sessionCompany} — ${displayRole}`
-    : sessionCompany || displayRole || 'Interview Session'
+    : sessionCompany || displayRole || null
 
   return (
     <div className="toolbar">
-      {/* Left — logo + session info */}
-      <div className="toolbar-left">
+      {/* Left — logo + session info (drag region) */}
+      <div className="toolbar-drag-region">
         <div className="toolbar-logo-block">
           <img src="./logo.svg" alt="RETIAS" className="toolbar-logo-img" />
           <span className="toolbar-brand">RETIAS</span>
         </div>
-
-        {sessionActive && (
+        {sessionActive && sessionLabel && (
           <div className="toolbar-session-info">
             <span className={`toolbar-status-dot ${isStarted ? 'live' : 'idle'}`} />
             <span className="toolbar-session-label">{sessionLabel}</span>
             {isStarted && <span className="toolbar-live-pill">Live</span>}
-            {!isStarted && (
-              <button type="button" className="toolbar-action-btn start" onClick={onStartSession}>
-                ▶ Start
-              </button>
-            )}
-          </div>
-        )}
-
-        {!sessionActive && (
-          <div className="toolbar-session-info">
-            <span className="toolbar-session-label muted">No active session</span>
           </div>
         )}
       </div>
 
-      {/* Right — timer + actions + controls */}
+      {/* Right-side compact controls */}
       <div className="toolbar-right">
-        {/* Conversation state badge */}
-        {isStarted && convState === 'LISTENING_CONTEXT' && (
-          <span className="state-badge listening">Listening…</span>
-        )}
-        {isStarted && (convState === 'QUESTION_CANDIDATE' || convState === 'QUESTION_CONFIRMED') && (
-          <span className="state-badge processing">Processing…</span>
-        )}
-        {isStarted && convState === 'ANSWER_IN_PROGRESS' && (
-          <span className="state-badge generating">Generating…</span>
+
+        {/* Conversation state */}
+        {isStarted && convState === 'LISTENING_CONTEXT' && <span className="state-badge listening">Listening…</span>}
+        {isStarted && (convState === 'QUESTION_CANDIDATE' || convState === 'QUESTION_CONFIRMED') && <span className="state-badge processing">Processing…</span>}
+        {isStarted && convState === 'ANSWER_IN_PROGRESS' && <span className="state-badge generating">Generating…</span>}
+
+        {/* Start button (before session starts) */}
+        {sessionActive && !isStarted && (
+          <button type="button" className="toolbar-action-btn start" onClick={onStartSession}>
+            ▶ Start
+          </button>
         )}
 
         {/* Timer */}
         {isStarted && (
           <div className="toolbar-timer">
-            <span className="timer-dot" />
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
             {timeStr}
           </div>
         )}
 
-        {/* Capture / Analyse (online test vs regular) */}
-        {isStarted && sessionActive && (
-          isOnlineTest ? (
-            <div className="capture-queue-ui">
-              <button
-                type="button"
-                className="toolbar-action-btn capture-btn"
-                onClick={handleCapture}
-                disabled={captureQueue.length >= 5}
-                title={captureQueue.length >= 5 ? 'Max 5 screenshots' : 'Capture screenshot'}
-              >
-                📸{captureQueue.length > 0 ? ` ${captureQueue.length}` : ' Capture'}
-              </button>
-              {captureQueue.length > 0 && (
-                <button type="button" className="toolbar-icon-btn" onClick={() => setCaptureQueue([])} title="Clear captures">✕</button>
-              )}
-              <button
-                type="button"
-                className="toolbar-action-btn analyse-screen-btn"
-                onClick={handleAnalyseAll}
-                disabled={captureQueue.length === 0}
-                title="Send all screenshots to AI"
-              >
-                Analyse All →
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              className={`toolbar-action-btn analyse-screen-btn${analysing ? ' loading' : ''}${!isPremium ? ' locked' : ''}`}
-              title={isPremium ? 'Analyse Screen' : '🔒 Premium feature'}
-              onClick={isPremium ? handleAnalyseScreen : undefined}
-              disabled={analysing || !isPremium}
-            >
-              {analysing ? '⏳' : <>{!isPremium && <span className="analyse-lock">🔒</span>}🖥 Analyse</>}
-            </button>
-          )
+        {/* Model badge */}
+        {isStarted && (
+          <div className="toolbar-model-badge">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+            Sonnet 4.6
+          </div>
         )}
 
         {/* Mic toggle */}
-        <button
-          type="button"
+        <button type="button"
           className={`toolbar-icon-btn ${micActive ? 'mic-active' : 'muted'}`}
           onClick={onToggleMic}
-          title={micActive ? 'Mute microphone' : 'Unmute microphone'}
-        >
+          title={micActive ? 'Mute microphone' : 'Unmute microphone'}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-            <line x1="12" y1="19" x2="12" y2="23" />
-            <line x1="8" y1="23" x2="16" y2="23" />
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
           </svg>
           {!micActive && <span className="mic-slash" />}
         </button>
@@ -200,7 +123,8 @@ export default function Toolbar({
         {/* End session */}
         {sessionActive && (
           <button type="button" className="toolbar-action-btn danger" onClick={onStopSession}>
-            ⏹ End Session
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+            End Session
           </button>
         )}
 

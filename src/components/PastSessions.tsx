@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 
 interface Props {
@@ -15,6 +15,16 @@ export default function PastSessions({ onNewSession, onDock }: Props) {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState<'all' | 'interview' | 'mock' | 'online-test'>('all')
+  const [snapOpen, setSnapOpen] = useState(false)
+  const snapRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (snapRef.current && !snapRef.current.contains(e.target as Node)) setSnapOpen(false)
+    }
+    if (snapOpen) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [snapOpen])
 
   useEffect(() => {
     loadSessions()
@@ -144,8 +154,39 @@ export default function PastSessions({ onNewSession, onDock }: Props) {
       <div className="ps-page-root">
         {/* Window controls */}
         <div className="ps-win-controls">
-          <button type="button" className="setup-window-btn" title="Minimise to dock" onClick={onDock}>↙</button>
-          <button type="button" className="setup-window-btn close" title="Close" onClick={() => window.electronAPI?.closeWindow()}>✕</button>
+          <div className="snap-btn-wrapper" ref={snapRef}>
+            <button type="button" className="dash-wc-btn dash-wc-snap" title="Snap layout" onClick={() => setSnapOpen(!snapOpen)}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+              </svg>
+            </button>
+            {snapOpen && (
+              <div className="snap-grid-dropdown">
+                <div className="snap-grid-row">
+                  <button type="button" className="snap-grid-cell" title="Top Left"    onClick={() => { window.electronAPI?.snapWindow('tl'); setSnapOpen(false) }} />
+                  <button type="button" className="snap-grid-cell" title="Top Middle"  onClick={() => { window.electronAPI?.snapWindow('tm'); setSnapOpen(false) }} />
+                  <button type="button" className="snap-grid-cell" title="Top Right"   onClick={() => { window.electronAPI?.snapWindow('tr'); setSnapOpen(false) }} />
+                </div>
+                <div className="snap-grid-row">
+                  <button type="button" className="snap-grid-cell" title="Bottom Left"   onClick={() => { window.electronAPI?.snapWindow('bl'); setSnapOpen(false) }} />
+                  <button type="button" className="snap-grid-cell" title="Bottom Middle" onClick={() => { window.electronAPI?.snapWindow('bm'); setSnapOpen(false) }} />
+                  <button type="button" className="snap-grid-cell" title="Bottom Right"  onClick={() => { window.electronAPI?.snapWindow('br'); setSnapOpen(false) }} />
+                </div>
+              </div>
+            )}
+          </div>
+          <button type="button" className="dash-wc-btn dash-wc-dock" title="Dock" onClick={onDock}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+              <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+            </svg>
+          </button>
+          <button type="button" className="dash-wc-btn dash-wc-close" title="Close" onClick={() => window.electronAPI?.closeWindow()}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
         </div>
 
         {/* Header */}
@@ -154,11 +195,6 @@ export default function PastSessions({ onNewSession, onDock }: Props) {
             <div className="ps-page-title">Past Sessions</div>
             <div className="ps-page-subtitle">Review and revisit your previous interview sessions.</div>
           </div>
-          {onNewSession && (
-            <button type="button" className="ps-new-session-btn" onClick={onNewSession}>
-              + New Session
-            </button>
-          )}
         </div>
 
         {/* Search */}

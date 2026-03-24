@@ -6,7 +6,9 @@ interface TranscriptLine {
   timestamp: number
 }
 
-export default function TranscriptPanel() {
+interface Props { micActive?: boolean }
+
+export default function TranscriptPanel({ micActive = true }: Props) {
   const [lines, setLines] = useState<TranscriptLine[]>([])
   const [autoScroll, setAutoScroll] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -50,12 +52,12 @@ export default function TranscriptPanel() {
       <div className="panel-header-row">
         <div className="panel-header-left">
           <span className="panel-title">Live Transcript</span>
-          <span className="panel-mic-badge">
-            <span className="panel-mic-dot" />
-            Mic Active
-          </span>
         </div>
         <div className="panel-header-right">
+          <span className={`panel-mic-badge${micActive ? '' : ' muted'}`}>
+            <span className="panel-mic-dot" />
+            {micActive ? 'Mic Active' : 'Mic Muted'}
+          </span>
           <label className="autoscroll-toggle" title="Auto-scroll">
             <input
               type="checkbox"

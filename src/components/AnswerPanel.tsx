@@ -17,9 +17,20 @@ interface AnswerEntry {
 
 const FONT_SIZES = [13, 15, 17, 19]
 
-export default function AnswerPanel() {
+interface Props {
+  isPremium?: boolean
+  isOnlineTest?: boolean
+  isStarted?: boolean
+  captureQueue?: string[]
+  onCapture?: () => void
+  onAnalyseAll?: () => void
+  onClearCaptures?: () => void
+}
+
+export default function AnswerPanel({ isPremium = false, isOnlineTest = false, isStarted = false, captureQueue = [], onCapture, onAnalyseAll, onClearCaptures }: Props) {
   const [answers, setAnswers] = useState<AnswerEntry[]>([])
   const [currentIdx, setCurrentIdx] = useState(-1)
+  const [analysing, setAnalysing] = useState(false)
   const [fontSizeIdx, setFontSizeIdx] = useState(() => {
     const saved = localStorage.getItem('answer-font-size-idx')
     return saved ? Math.min(Number(saved), FONT_SIZES.length - 1) : 0
@@ -142,6 +153,13 @@ export default function AnswerPanel() {
     setTimeout(() => setCopied(false), 1500)
   }
 
+  const handleAnalyseScreen = async () => {
+    if (analysing || !isPremium) return
+    setAnalysing(true)
+    try { await window.electronAPI?.analyseScreen() }
+    finally { setAnalysing(false) }
+  }
+
   return (
     <div className="answer-panel" data-font-size={fontSizeIdx}>
       {/* Panel header — tab bar */}
@@ -149,14 +167,60 @@ export default function AnswerPanel() {
         <div className="panel-tabs">
           <span className="panel-tab active">AI Answer</span>
           <span className="panel-tab-sep" />
-          <button type="button" className="panel-tab" onClick={handlePrev} disabled={currentIdx <= 0} title="Previous answer">‹ History</button>
+          <div className="panel-nav-arrows">
+            <button type="button" className="panel-nav-btn" onClick={handlePrev} disabled={currentIdx <= 0} title="Previous answer">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+            </button>
+            <span className="panel-nav-count">{answers.length > 0 ? `${currentIdx + 1} / ${answers.length}` : '—'}</span>
+            <button type="button" className="panel-nav-btn" onClick={handleNext} disabled={currentIdx >= answers.length - 1} title="Next answer">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </button>
+          </div>
           {hasNewerAnswer && (
-            <button type="button" className="panel-tab new-answer-hint" onClick={() => setCurrentIdx(answers.length - 1)} title="Jump to latest">↓ New</button>
+            <button type="button" className="panel-tab new-answer-hint" onClick={() => setCurrentIdx(answers.length - 1)} title="Jump to latest">↓ Latest</button>
           )}
-          <span className="panel-tab-sep" />
-          <span className="panel-tab-count">{answers.length > 0 ? `${currentIdx + 1}/${answers.length}` : '—'}</span>
         </div>
         <div className="panel-header-right">
+          {isOnlineTest ? (
+            <div className="panel-capture-ui">
+              <button
+                type="button"
+                className="panel-capture-btn"
+                onClick={onCapture}
+                disabled={captureQueue.length >= 5}
+                title={captureQueue.length >= 5 ? 'Max 5 screenshots' : 'Capture screenshot'}
+              >
+                📸{captureQueue.length > 0 ? ` ${captureQueue.length}` : ' Capture'}
+              </button>
+              {captureQueue.length > 0 && (
+                <button type="button" className="panel-action-btn" onClick={onClearCaptures} title="Clear captures">✕</button>
+              )}
+              <button
+                type="button"
+                className="panel-analyse-btn"
+                onClick={onAnalyseAll}
+                disabled={captureQueue.length === 0}
+                title="Send all screenshots to AI"
+              >
+                Analyse All →
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className={`panel-analyse-btn${analysing ? ' loading' : ''}${!isPremium ? ' locked' : ''}`}
+              onClick={handleAnalyseScreen}
+              disabled={analysing || !isPremium || !isStarted}
+              title={!isStarted ? 'Click Start first' : isPremium ? 'Analyse Screen' : '🔒 Premium feature'}
+            >
+              {!isPremium && '🔒 '}{analysing ? '⏳' : '🖥 Analyse Screen'}
+            </button>
+          )}
+          <span className="panel-action-divider" />
           <button type="button" className="panel-action-btn" onClick={handleFontDecrease} title="Decrease text size" disabled={fontSizeIdx === 0}>A-</button>
           <button type="button" className="panel-action-btn" onClick={handleFontIncrease} title="Increase text size" disabled={fontSizeIdx === FONT_SIZES.length - 1}>A+</button>
           <span className="panel-action-divider" />

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 
 const STEPS = [
   {
@@ -47,9 +48,9 @@ export default function Tutorial({ onDone }: Props) {
     onDone()
   }
 
-  return (
-    <div className="tutorial-overlay" role="dialog" aria-modal="true">
-      <div className="tutorial-card">
+  return createPortal(
+    <div className="tutorial-overlay" role="dialog" aria-modal="true" onClick={dismiss}>
+      <div className="tutorial-card" onClick={e => e.stopPropagation()}>
         <button type="button" className="tutorial-skip" onClick={dismiss}>Skip</button>
         <div className="tutorial-emoji" aria-hidden="true">{current.emoji}</div>
         <h2 className="tutorial-title">{current.title}</h2>
@@ -83,6 +84,7 @@ export default function Tutorial({ onDone }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

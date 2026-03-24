@@ -14,9 +14,11 @@ import TranscriptPanel from './components/Transcript'
 import AnswerPanel from './components/AnswerPanel'
 import AudioCapture from './components/AudioCapture'
 import ManualPromptBar from './components/ManualPromptBar'
+import CvManager from './components/CvManager'
+import Settings from './components/Settings'
 import './index.css'
 
-type View = 'dashboard' | 'setup' | 'mock-interview' | 'past-sessions' | 'session' | 'online-test'
+type View = 'dashboard' | 'setup' | 'mock-interview' | 'past-sessions' | 'session' | 'online-test' | 'cv-manager' | 'settings'
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -31,6 +33,7 @@ export default function App() {
   const [isStarted, setIsStarted] = useState(false)
   const [micActive, setMicActive] = useState(true)
   const [isOnlineTest, setIsOnlineTest] = useState(false)
+  const [captureQueue, setCaptureQueue] = useState<string[]>([])
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null)
   const [convState, setConvState] = useState<string>('IDLE')
   const [isDocked, setIsDocked] = useState(false)
@@ -63,6 +66,7 @@ export default function App() {
         .then((u) => {
           if (u) {
             setUser(u)
+            setShowTutorial(!localStorage.getItem('retias_tutorial_seen'))
           } else {
             localStorage.removeItem('retias_user_id')
           }
@@ -99,6 +103,8 @@ export default function App() {
   const handleLogin = (u: User) => {
     localStorage.setItem('retias_user_id', u.id)
     setUser(u)
+    setView('dashboard')
+    setShowTutorial(!localStorage.getItem('retias_tutorial_seen'))
   }
 
   const handleLogout = () => {
@@ -110,6 +116,7 @@ export default function App() {
     window.electronAPI?.authLogout()
     setUser(null)
     setCvs([])
+    setView('dashboard')
   }
 
   const handleCreateSession = (config: SessionConfig) => {
@@ -140,11 +147,26 @@ export default function App() {
 
   const handleStartSession = () => setIsStarted(true)
 
+  const handleCapture = async () => {
+    if (captureQueue.length >= 5) return
+    try {
+      const base64 = await window.electronAPI?.captureScreen()
+      if (base64) setCaptureQueue(prev => [...prev, base64])
+    } catch {}
+  }
+
+  const handleAnalyseAll = () => {
+    if (captureQueue.length === 0) return
+    window.electronAPI?.analyseScreens(captureQueue)
+    setCaptureQueue([])
+  }
+
   const handleStop = () => {
     window.electronAPI?.stopSession()
     setSessionActive(false)
     setIsStarted(false)
     setIsOnlineTest(false)
+    setCaptureQueue([])
     setView('dashboard')
     if (isDocked) {
       setIsDocked(false)
@@ -176,7 +198,7 @@ export default function App() {
   }
 
   // Docked non-session views
-  if (isDocked && (view === 'setup' || view === 'dashboard' || view === 'mock-interview' || view === 'online-test')) {
+  if (isDocked && (view === 'setup' || view === 'dashboard' || view === 'mock-interview' || view === 'online-test' || view === 'past-sessions' || view === 'cv-manager' || view === 'settings')) {
     return (
       <div className="app-root docked">
         <div
@@ -195,7 +217,8 @@ export default function App() {
   const handleSidebarNavigate = (item: 'dashboard' | 'sessions' | 'cv-manager' | 'settings') => {
     if (item === 'sessions') setView('past-sessions')
     else if (item === 'dashboard') setView('dashboard')
-    // cv-manager and settings: no-op for now
+    else if (item === 'cv-manager') setView('cv-manager')
+    else if (item === 'settings') setView('settings')
   }
 
   if (view === 'dashboard') {
@@ -270,6 +293,23 @@ export default function App() {
     )
   }
 
+  if (view === 'cv-manager') {
+    return (
+      <div className="app-root">
+        <div className="page-layout">
+          <Sidebar activeItem="cv-manager" user={user} onNavigate={handleSidebarNavigate} />
+          <div className="page-main">
+            <CvManager
+              cvs={cvs}
+              onCvsChange={refreshCvs}
+              onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (view === 'past-sessions') {
     return (
       <div className="app-root">
@@ -279,6 +319,23 @@ export default function App() {
             <PastSessions
               onNewSession={() => setView('setup')}
               onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (view === 'settings') {
+    return (
+      <div className="app-root">
+        <div className="page-layout">
+          <Sidebar activeItem="settings" user={user} onNavigate={handleSidebarNavigate} />
+          <div className="page-main">
+            <Settings
+              user={user}
+              onLogout={handleLogout}
+              onUserUpdate={(updates) => setUser(prev => prev ? { ...prev, ...updates } : prev)}
             />
           </div>
         </div>
@@ -324,15 +381,22 @@ export default function App() {
           onToggleDock={toggleDock}
           convState={convState}
           isPremium={user?.is_premium ?? false}
-          isOnlineTest={isOnlineTest}
           sessionCompany={sessionConfig?.company}
           sessionRole={sessionConfig?.targetRole || sessionConfig?.jobDescription}
         />
 
         <div className="panels" ref={panelsRef}>
-          <TranscriptPanel />
+          <TranscriptPanel micActive={micActive} />
           <div className="panel-divider" onMouseDown={handleDividerMouseDown} />
-          <AnswerPanel />
+          <AnswerPanel
+            isPremium={user?.is_premium ?? false}
+            isOnlineTest={isOnlineTest}
+            isStarted={isStarted}
+            captureQueue={captureQueue}
+            onCapture={handleCapture}
+            onAnalyseAll={handleAnalyseAll}
+            onClearCaptures={() => setCaptureQueue([])}
+          />
         </div>
 
         <ManualPromptBar

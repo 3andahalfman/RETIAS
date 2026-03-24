@@ -99,6 +99,11 @@ export async function getUserById(userId: string): Promise<User | null> {
   return mapUser(userData.user)
 }
 
+export async function updateDisplayName(userId: string, displayName: string): Promise<void> {
+  const { error } = await supabase.from('users').update({ display_name: displayName }).eq('id', userId)
+  if (error) console.error('[auth-store] updateDisplayName error:', error.message)
+}
+
 export async function authLogout(): Promise<void> {
   await supabase.auth.signOut()
 }

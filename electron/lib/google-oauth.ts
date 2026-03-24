@@ -117,9 +117,8 @@ export async function startGoogleOAuth(): Promise<GoogleUserInfo> {
       server?.close()
 
       try {
-        // Exchange authorization code for tokens
-        const port = (server!.address() as any)?.port
-        const redirectUri = `http://127.0.0.1:${port}`
+        // Exchange authorization code for tokens — reuse the port captured at listen time
+        const redirectUri = oauthRedirectUri
 
         const tokenBody = new URLSearchParams({
           code,
@@ -167,11 +166,16 @@ export async function startGoogleOAuth(): Promise<GoogleUserInfo> {
       }
     })
 
+    let oauthPort = 0
+    let oauthRedirectUri = ''
+
     // Listen on a random available port
     server.listen(0, '127.0.0.1', () => {
       const addr = server!.address() as { port: number }
-      const port = addr.port
-      const redirectUri = `http://127.0.0.1:${port}`
+      oauthPort = addr.port
+      oauthRedirectUri = `http://127.0.0.1:${oauthPort}`
+      const port = oauthPort
+      const redirectUri = oauthRedirectUri
 
       const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
       authUrl.searchParams.set('client_id', clientId)

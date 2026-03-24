@@ -37,23 +37,28 @@ export default function Sidebar({ activeItem, user, onNavigate }: SidebarProps) 
 
       <div className="sidebar-spacer" />
 
-      <div className="sidebar-upgrade-card">
-        <div className="sidebar-upgrade-title">
-          <span>Free Plan</span>
-          <span className="sidebar-upgrade-badge">FREE</span>
+      {!user.is_premium && (
+        <div className="sidebar-upgrade-card">
+          <div className="sidebar-upgrade-title">
+            <span>Free Plan</span>
+            <span className="sidebar-upgrade-badge">FREE</span>
+          </div>
+          <div className="sidebar-upgrade-desc">
+            Upgrade for unlimited sessions.
+          </div>
+          <button type="button" className="sidebar-upgrade-btn">
+            Upgrade to Premium
+          </button>
         </div>
-        <div className="sidebar-upgrade-desc">
-          Upgrade for premium AI features and unlimited sessions
-        </div>
-        <button type="button" className="sidebar-upgrade-btn">
-          Upgrade to Premium
-        </button>
-      </div>
+      )}
 
       <div className="sidebar-profile">
         <div className="sidebar-avatar">{initials}</div>
         <div className="sidebar-profile-info">
-          <div className="sidebar-profile-name">{user.display_name || user.email}</div>
+          <div className="sidebar-profile-name">
+            {user.display_name || user.email}
+            {user.is_premium && <span className="sidebar-pro-badge">PRO</span>}
+          </div>
           <div className="sidebar-profile-email">{user.email}</div>
         </div>
       </div>
