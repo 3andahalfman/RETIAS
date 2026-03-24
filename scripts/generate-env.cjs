@@ -20,7 +20,7 @@ const ENV_FILE = path.join(ROOT, '.env')
 const OUT_FILE = path.join(ROOT, 'electron', '_env_generated.ts')
 
 // Variables we want to bake into the runtime bundle
-const RUNTIME_VARS = ['ANTHROPIC_API_KEY', 'DEEPGRAM_API_KEY', 'SUPABASE_URL', 'SUPABASE_ANON_KEY']
+const RUNTIME_VARS = ['ANTHROPIC_API_KEY', 'DEEPGRAM_API_KEY', 'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET']
 
 // Parse .env file
 function parseEnv(filePath) {

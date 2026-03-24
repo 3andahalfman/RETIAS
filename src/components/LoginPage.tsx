@@ -2,11 +2,14 @@ import { useState, useEffect } from 'react'
 
 interface Props {
   onLogin: (user: User) => void
+  isDocked: boolean
+  onDock: () => void
+  onUndock: () => void
 }
 
 type Tab = 'signin' | 'register'
 
-export default function LoginPage({ onLogin }: Props) {
+export default function LoginPage({ onLogin, isDocked, onDock, onUndock }: Props) {
   const [tab, setTab] = useState<Tab>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -89,6 +92,22 @@ export default function LoginPage({ onLogin }: Props) {
     }
   }
 
+  if (isDocked) {
+    return (
+      <div className="app-root docked">
+        <div
+          className="docked-content"
+          onClick={onUndock}
+          onMouseEnter={() => window.electronAPI?.setIgnoreMouseEvents(false)}
+          onMouseLeave={() => window.electronAPI?.setIgnoreMouseEvents(true)}
+          title="Click to expand"
+        >
+          <img className="docked-logo" src="./logo.svg" alt="Logo" />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="login-root">
       {/* Window controls */}
@@ -110,7 +129,7 @@ export default function LoginPage({ onLogin }: Props) {
             </div>
           )}
         </div>
-        <button type="button" className="login-win-btn" title="Minimise to dock" onClick={() => window.electronAPI?.dockWindow()}>↙</button>
+        <button type="button" className="login-win-btn" title="Minimise to dock" onClick={onDock}>↙</button>
         <button type="button" className="login-win-btn close" title="Close" onClick={() => window.electronAPI?.closeWindow()}>✕</button>
       </div>
 

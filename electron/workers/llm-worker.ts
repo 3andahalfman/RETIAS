@@ -469,6 +469,7 @@ export class LLMWorker {
     this.ipcBus.on('overlay:regenerate', this.regenerateHandler)
     this.ipcBus.on('screen:analyse', (base64Image: string) => this.analyseScreen(base64Image))
     this.ipcBus.on('screen:analyse-multi', (images: string[]) => this.analyseScreenMulti(images))
+    this.ipcBus.on('llm:manual-prompt', (prompt: string) => this.answerManualPrompt(prompt))
   }
 
   /** Abort the active stream if one is running, returns true if aborted */
@@ -651,6 +652,52 @@ export class LLMWorker {
       if (!isAbort) {
         console.error('[LLMWorker] Multi-screen analysis error:', err?.message)
         this.ipcBus.emit('llm:token', '\n\n⚠️ Screen analysis failed. Please try again.')
+        this.ipcBus.emit('llm:done')
+      }
+    } finally {
+      this.currentStream = null
+      this.isGenerating = false
+    }
+  }
+
+  private async answerManualPrompt(prompt: string) {
+    if (this.isGenerating) this.abortCurrent()
+
+    // Pick the best available system prompt for the current session context
+    const systemPrompt = this.lastContext?.systemPrompt
+      ?? (this.sessionTestType ? getScreenAnalysisPrompt(this.sessionTestType) : null)
+      ?? 'You are an expert AI assistant. Answer the user\'s question clearly, concisely, and accurately.'
+
+    // Show the user's question as the card title in the answer panel
+    const shortTitle = prompt.length > 60 ? prompt.slice(0, 57) + '…' : prompt
+    this.ipcBus.emit('screen:card', shortTitle, 'manual')
+
+    this.isGenerating = true
+    let fullResponse = ''
+    try {
+      console.log('[LLMWorker] Manual prompt:', prompt.slice(0, 80))
+      const stream = this.client.messages.stream({
+        model: MODEL,
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: prompt }],
+      })
+      this.currentStream = stream
+      for await (const event of stream) {
+        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+          fullResponse += event.delta.text
+          this.ipcBus.emit('llm:token', event.delta.text)
+        }
+      }
+      this.ipcBus.emit('llm:done')
+      if (fullResponse) {
+        await this.cache.set('Manual_' + Date.now(), 'manual', fullResponse)
+      }
+    } catch (err: any) {
+      const isAbort = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort')
+      if (!isAbort) {
+        console.error('[LLMWorker] Manual prompt error:', err?.message)
+        this.ipcBus.emit('llm:token', '\n\n⚠️ Failed to get a response. Please try again.')
         this.ipcBus.emit('llm:done')
       }
     } finally {

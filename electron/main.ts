@@ -264,6 +264,15 @@ async function bootstrap() {
     ipcBus.emit('screen:analyse-multi', images)
   })
 
+  // Manual text prompt — user types a question directly, routed to LLM worker
+  ipcMain.handle('llm:manual-prompt', async (_event, prompt: unknown) => {
+    if (!currentUserIsPremium) throw new Error('Manual prompts are a premium feature. Upgrade your account to use it.')
+    if (typeof prompt !== 'string') throw new Error('Invalid prompt')
+    const safe = prompt.trim().slice(0, 2000)
+    if (!safe) throw new Error('Prompt cannot be empty')
+    ipcBus.emit('llm:manual-prompt', safe)
+  })
+
   ipcMain.on('session:start', (_event, config) => {
     // Sanitise all free-text fields before they reach the LLM worker
     const safeConfig = {
@@ -624,15 +633,30 @@ async function bootstrap() {
   ipcMain.on('window:dock', () => {
     if (overlayWindow) {
       preDockBounds = overlayWindow.getBounds()
-      overlayWindow.setBounds({ width: 50, height: 50, x: preDockBounds.x, y: preDockBounds.y })
+      overlayWindow.setBounds({ width: 60, height: 60, x: preDockBounds.x, y: preDockBounds.y })
       overlayWindow.setResizable(false)
+      // Pass mouse events through transparent areas so other apps remain usable.
+      // forward:true still delivers mousemove to the renderer so the orb hover can toggle this back.
+      overlayWindow.setIgnoreMouseEvents(true, { forward: true })
     }
   })
 
   ipcMain.on('window:undock', () => {
     if (overlayWindow) {
+      overlayWindow.setIgnoreMouseEvents(false)
       overlayWindow.setBounds(preDockBounds)
       overlayWindow.setResizable(true)
+    }
+  })
+
+  // Renderer toggles mouse-event capturing when cursor enters/leaves the docked orb
+  ipcMain.on('window:set-ignore-mouse', (_event, ignore: boolean) => {
+    if (overlayWindow) {
+      if (ignore) {
+        overlayWindow.setIgnoreMouseEvents(true, { forward: true })
+      } else {
+        overlayWindow.setIgnoreMouseEvents(false)
+      }
     }
   })
 

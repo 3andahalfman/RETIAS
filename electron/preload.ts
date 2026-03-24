@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   analyseScreen: () => ipcRenderer.invoke('screen:analyse'),
   captureScreen: (): Promise<string> => ipcRenderer.invoke('screen:capture'),
   analyseScreens: (images: string[]): Promise<void> => ipcRenderer.invoke('screen:analyse-multi', images),
+  sendManualPrompt: (text: string): Promise<void> => ipcRenderer.invoke('llm:manual-prompt', text),
   sendAudioChunk: (buffer: ArrayBuffer, sampleRate: number, source: 'mic' | 'system') =>
     ipcRenderer.send('audio:chunk', buffer, sampleRate, source),
 
@@ -55,6 +56,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.send('window:resize', width, height, animated),
   snapWindow: (position: 'tl' | 'tm' | 'tr' | 'bl' | 'bm' | 'br') =>
     ipcRenderer.send('window:snap', position),
+  setIgnoreMouseEvents: (ignore: boolean) => ipcRenderer.send('window:set-ignore-mouse', ignore),
 
   // Past sessions
   getPastSessions: () => ipcRenderer.invoke('get-past-sessions'),

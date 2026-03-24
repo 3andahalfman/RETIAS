@@ -88,6 +88,7 @@ interface ElectronAPI {
   analyseScreen: () => Promise<void>
   captureScreen: () => Promise<string>
   analyseScreens: (images: string[]) => Promise<void>
+  sendManualPrompt: (text: string) => Promise<void>
   sendAudioChunk: (buffer: ArrayBuffer, sampleRate: number, source: 'mic' | 'system') => void
 
   // Answer streaming
@@ -111,6 +112,7 @@ interface ElectronAPI {
   closeWindow: () => void
   resizeWindow: (width: number, height: number, animated?: boolean) => void
   snapWindow: (position: 'tl' | 'tm' | 'tr' | 'bl' | 'bm' | 'br') => void
+  setIgnoreMouseEvents: (ignore: boolean) => void
 
   // Past sessions
   getPastSessions: () => Promise<PastSession[]>

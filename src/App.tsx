@@ -12,6 +12,7 @@ import Toolbar from './components/Toolbar'
 import TranscriptPanel from './components/Transcript'
 import AnswerPanel from './components/AnswerPanel'
 import AudioCapture from './components/AudioCapture'
+import ManualPromptBar from './components/ManualPromptBar'
 import './index.css'
 
 type View = 'dashboard' | 'setup' | 'mock-interview' | 'past-sessions' | 'session' | 'online-test'
@@ -100,6 +101,10 @@ export default function App() {
   }
 
   const handleLogout = () => {
+    if (isDocked) {
+      setIsDocked(false)
+      window.electronAPI?.undockWindow()
+    }
     localStorage.removeItem('retias_user_id')
     window.electronAPI?.authLogout()
     setUser(null)
@@ -159,18 +164,28 @@ export default function App() {
 
   // Auth gate
   if (!user) {
-    return <LoginPage onLogin={handleLogin} />
+    return (
+      <LoginPage
+        onLogin={handleLogin}
+        isDocked={isDocked}
+        onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
+        onUndock={() => { setIsDocked(false); window.electronAPI?.undockWindow() }}
+      />
+    )
   }
 
   // Docked non-session views
   if (isDocked && (view === 'setup' || view === 'dashboard' || view === 'mock-interview' || view === 'online-test')) {
     return (
       <div className="app-root docked">
-        <div className="docked-content" onClick={() => {
-          setIsDocked(false)
-          window.electronAPI?.undockWindow()
-        }}>
-          <img className="docked-logo" src="./logo.svg" alt="Logo" title="Click to expand" />
+        <div
+          className="docked-content"
+          onClick={() => { setIsDocked(false); window.electronAPI?.undockWindow() }}
+          onMouseEnter={() => window.electronAPI?.setIgnoreMouseEvents(false)}
+          onMouseLeave={() => window.electronAPI?.setIgnoreMouseEvents(true)}
+          title="Click to expand"
+        >
+          <img className="docked-logo" src="./logo.svg" alt="Logo" />
         </div>
       </div>
     )
@@ -260,7 +275,13 @@ export default function App() {
       <AudioCapture active={isStarted && sessionActive && micActive} />
 
       {isDocked && (
-        <div className="docked-content" onClick={toggleDock}>
+        <div
+          className="docked-content"
+          onClick={toggleDock}
+          onMouseEnter={() => window.electronAPI?.setIgnoreMouseEvents(false)}
+          onMouseLeave={() => window.electronAPI?.setIgnoreMouseEvents(true)}
+          title="Click to expand"
+        >
           <img className="docked-logo" src="./logo.svg" alt="Logo" />
           <div className={`docked-bars ${isStarted && sessionActive && micActive ? 'active' : ''}`}>
             <span /><span /><span />
@@ -288,6 +309,11 @@ export default function App() {
           <div className="panel-divider" onMouseDown={handleDividerMouseDown} />
           <AnswerPanel />
         </div>
+
+        <ManualPromptBar
+          sessionActive={sessionActive}
+          isPremium={user?.is_premium ?? false}
+        />
       </div>
     </div>
   )
