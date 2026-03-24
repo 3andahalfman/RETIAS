@@ -149,138 +149,79 @@ export default function Dashboard({ onNewSession, onPastSessions, onMockIntervie
         <div className="dash-hero-sub">Ready for your next interview? Let's get started.</div>
       </div>
 
-      {/* CTA buttons */}
-      <div className="dash-cta-row">
-        <button type="button" className="dash-cta-btn primary" onClick={onNewSession}>
-          <span className="dash-cta-icon">+</span>
-          <span>
-            <span className="dash-cta-label">New Session</span>
-            <span className="dash-cta-desc">Start a live interview session</span>
-          </span>
-        </button>
-        <button type="button" className="dash-cta-btn secondary" onClick={onPastSessions}>
-          <span className="dash-cta-icon">🗂</span>
-          <span>
-            <span className="dash-cta-label">Past Sessions</span>
-            <span className="dash-cta-desc">Review saved interviews & answers</span>
-          </span>
-        </button>
-        <button type="button" className="dash-cta-btn mock" onClick={onMockInterview}>
-          <span className="dash-cta-icon">🎭</span>
-          <span>
-            <span className="dash-cta-label">Mock Interview</span>
-            <span className="dash-cta-desc">Practice with a YouTube interviewer</span>
-          </span>
-        </button>
-        <button
-          type="button"
-          className={`dash-cta-btn test${!user.is_premium ? ' locked' : ''}`}
-          onClick={user.is_premium ? onOnlineTest : undefined}
-          title={user.is_premium ? undefined : '🔒 Premium feature — upgrade to unlock'}
-        >
-          <span className="dash-cta-icon">🧪</span>
-          <span>
-            <span className="dash-cta-label">
-              Online Test & Onboarding{!user.is_premium && <span className="cta-lock-badge"> 🔒</span>}
-            </span>
-            <span className="dash-cta-desc">
-              {user.is_premium ? 'AI answers for assessments & e-learning' : 'Premium — upgrade to unlock'}
-            </span>
-          </span>
-        </button>
+      {/* Metrics row — always show */}
+      <div className="dash-metrics-row">
+        <div className="dash-metric-card">
+          <div className="dash-metric-value">{metrics?.totalSessions ?? 0}</div>
+          <div className="dash-metric-label">Sessions</div>
+        </div>
+        <div className="dash-metric-card">
+          <div className="dash-metric-value">{metrics?.totalQAs ?? 0}</div>
+          <div className="dash-metric-label">This Week</div>
+        </div>
+        <div className="dash-metric-card">
+          <div className="dash-metric-value">{metrics && metrics.avgDurationMins > 0 ? `${metrics.avgDurationMins}m` : '—'}</div>
+          <div className="dash-metric-label">Avg Duration</div>
+        </div>
       </div>
 
-      {/* Metrics */}
-      {metrics && (
-        <>
-          <div className="dash-section-title">Overview</div>
-          <div className="dash-metrics-grid">
-            <div className="dash-metric-card">
-              <div className="dash-metric-value">{metrics.totalSessions}</div>
-              <div className="dash-metric-label">Sessions</div>
-            </div>
-            <div className="dash-metric-card">
-              <div className="dash-metric-value">{metrics.totalQAs}</div>
-              <div className="dash-metric-label">Q&As Answered</div>
-            </div>
-            <div className="dash-metric-card">
-              <div className="dash-metric-value">{metrics.avgDurationMins > 0 ? `${metrics.avgDurationMins}m` : '—'}</div>
-              <div className="dash-metric-label">Avg Duration</div>
-            </div>
-            <div className="dash-metric-card">
-              <div className="dash-metric-value dash-metric-company">{metrics.topCompany ?? '—'}</div>
-              <div className="dash-metric-label">Top Company</div>
-            </div>
+      {/* Start a Session */}
+      <div className="dash-section-title">Start a Session</div>
+      <div className="dash-session-cards">
+        <div className="dash-session-card">
+          <div className="dash-session-card-icon dash-session-card-icon-blue">💼</div>
+          <div className="dash-session-card-body">
+            <div className="dash-session-card-title">Real Interview</div>
+            <div className="dash-session-card-desc">You're ready! Let's ace it and let AI handle the rest.</div>
+            <button type="button" className="dash-session-card-btn" onClick={onNewSession}>More Sessions →</button>
           </div>
-
-          {/* Recent sessions */}
-          {metrics.recentSessions.length > 0 && (
-            <>
-              <div className="dash-section-title dash-section-title-spaced">Recent Sessions</div>
-              <div className="dash-recent-list">
-                {metrics.recentSessions.map((s) => (
-                  <div key={s.session_id} className="dash-recent-item">
-                    <div className="dash-recent-left">
-                      <div className="dash-recent-company">{s.company || 'Unknown Company'}</div>
-                      <div className="dash-recent-role">{s.target_role ? (s.target_role.length > 80 ? s.target_role.slice(0, 80) + '…' : s.target_role) : 'Interview Session'}</div>
-                    </div>
-                    <div className="dash-recent-right">
-                      <div className="dash-recent-date">{formatDate(s.started_at)}</div>
-                      <div className="dash-recent-meta">{formatDuration(s.started_at, s.ended_at)} · {s.qa_count} Q&As</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </>
-      )}
-
-      {/* My CVs section */}
-      <div className="dash-cv-section">
-        <div className="dash-cv-header">
-          <span className="dash-section-title dash-cv-title">My CVs</span>
-          <button
-            type="button"
-            className="dash-cv-add-btn"
-            title="Upload a CV"
-            onClick={() => cvFileInputRef.current?.click()}
-            disabled={cvUploading}
-          >
-            {cvUploading ? '…' : '+'}
-          </button>
-          <input
-            ref={cvFileInputRef}
-            type="file"
-            accept=".txt,.md,.pdf,.docx,.doc"
-            title="Upload CV"
-            aria-label="Upload CV file"
-            className="dash-cv-file-input"
-            onChange={handleCvUpload}
-          />
         </div>
-        {cvError && <div className="dash-cv-error">{cvError}</div>}
-        {cvs.length === 0 ? (
-          <div className="dash-cv-empty">No CVs saved yet. Upload one to reuse across sessions.</div>
-        ) : (
-          <div className="dash-cv-list">
-            {cvs.map((cv) => (
-              <div key={cv.id} className="dash-cv-item">
-                <div className="dash-cv-name" title={cv.name}>{cv.name}</div>
-                <div className="dash-cv-date">{formatDate(cv.created_at)}</div>
-                <button
-                  type="button"
-                  className="dash-cv-delete"
-                  title="Delete CV"
-                  onClick={() => handleDeleteCv(cv.id)}
-                >
-                  ✕
-                </button>
+        <div className="dash-session-card">
+          <div className="dash-session-card-icon dash-session-card-icon-teal">🎭</div>
+          <div className="dash-session-card-body">
+            <div className="dash-session-card-title">Mock Interview</div>
+            <div className="dash-session-card-desc">Practice with a YouTube interviewer — be as real as a real one.</div>
+            <button type="button" className="dash-session-card-btn" onClick={onMockInterview}>Start Mock →</button>
+          </div>
+        </div>
+        <div
+          className={`dash-session-card${!user.is_premium ? ' locked' : ''}`}
+          title={!user.is_premium ? '🔒 Premium — upgrade to unlock' : undefined}
+        >
+          <div className="dash-session-card-icon dash-session-card-icon-teal2">🧪</div>
+          <div className="dash-session-card-body">
+            <div className="dash-session-card-title">Online Test {!user.is_premium && '🔒'}</div>
+            <div className="dash-session-card-desc">Solve coding challenges and assessments with ease, using AI.</div>
+            <button
+              type="button"
+              className="dash-session-card-btn"
+              onClick={user.is_premium ? onOnlineTest : undefined}
+              disabled={!user.is_premium}
+            >+ Start Test →</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Sessions */}
+      {metrics && metrics.recentSessions.length > 0 && (
+        <>
+          <div className="dash-section-title dash-section-title-spaced">Recent Sessions</div>
+          <div className="dash-recent-list">
+            {metrics.recentSessions.map((s) => (
+              <div key={s.session_id} className="dash-recent-item">
+                <div className="dash-recent-left">
+                  <div className="dash-recent-company">{s.company || 'Unknown Company'}</div>
+                  <div className="dash-recent-role">{s.target_role ? (s.target_role.length > 80 ? s.target_role.slice(0, 80) + '…' : s.target_role) : 'Interview Session'}</div>
+                </div>
+                <div className="dash-recent-right">
+                  <div className="dash-recent-date">{formatDate(s.started_at)}</div>
+                  <div className="dash-recent-meta">{formatDuration(s.started_at, s.ended_at)} · {s.qa_count} Q&As</div>
+                </div>
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       <div className="dash-footer">
         <span className="dash-footer-text">RETIAS — Real Time Interview Assistant Software</span>

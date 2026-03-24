@@ -276,7 +276,10 @@ export default function App() {
         <div className="page-layout">
           <Sidebar activeItem="sessions" user={user} onNavigate={handleSidebarNavigate} />
           <div className="page-main">
-            <PastSessions onNewSession={() => setView('setup')} />
+            <PastSessions
+              onNewSession={() => setView('setup')}
+              onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
+            />
           </div>
         </div>
       </div>

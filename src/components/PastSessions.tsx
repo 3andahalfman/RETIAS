@@ -3,9 +3,10 @@ import ReactMarkdown from 'react-markdown'
 
 interface Props {
   onNewSession?: () => void
+  onDock?: () => void
 }
 
-export default function PastSessions({ onNewSession }: Props) {
+export default function PastSessions({ onNewSession, onDock }: Props) {
   const [sessions, setSessions] = useState<PastSession[]>([])
   const [selected, setSelected] = useState<SessionDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -141,9 +142,18 @@ export default function PastSessions({ onNewSession }: Props) {
       )}
 
       <div className="ps-page-root">
+        {/* Window controls */}
+        <div className="ps-win-controls">
+          <button type="button" className="setup-window-btn" title="Minimise to dock" onClick={onDock}>↙</button>
+          <button type="button" className="setup-window-btn close" title="Close" onClick={() => window.electronAPI?.closeWindow()}>✕</button>
+        </div>
+
         {/* Header */}
         <div className="ps-page-header">
-          <div className="ps-page-title">Past Sessions</div>
+          <div>
+            <div className="ps-page-title">Past Sessions</div>
+            <div className="ps-page-subtitle">Review and revisit your previous interview sessions.</div>
+          </div>
           {onNewSession && (
             <button type="button" className="ps-new-session-btn" onClick={onNewSession}>
               + New Session
