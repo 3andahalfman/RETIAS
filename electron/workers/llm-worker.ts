@@ -11,8 +11,8 @@ import { AnswerCache } from '../lib/cache.js'
  * 4. On question:update (compound question continuation) → abort current stream + restart
  */
 
-const MODEL = 'claude-haiku-4-5-20251001'
-const MAX_TOKENS = 400
+const MODEL = 'claude-sonnet-4-6'
+const MAX_TOKENS = 1200
 
 function getScreenAnalysisPrompt(testType: string | null): string {
   const FORMAT = `
@@ -572,7 +572,7 @@ export class LLMWorker {
       console.log('[LLMWorker] Analysing screen with vision...')
       const stream = this.client.messages.stream({
         model: 'claude-sonnet-4-6',
-        max_tokens: 2048,
+        max_tokens: 6000,
         system: getScreenAnalysisPrompt(this.sessionTestType),
         messages: [{
           role: 'user',
@@ -626,7 +626,7 @@ export class LLMWorker {
       }))
       const stream = this.client.messages.stream({
         model: 'claude-sonnet-4-6',
-        max_tokens: 2048,
+        max_tokens: 6000,
         system: getScreenAnalysisPrompt(this.sessionTestType),
         messages: [{
           role: 'user',
@@ -678,7 +678,7 @@ export class LLMWorker {
       console.log('[LLMWorker] Manual prompt:', prompt.slice(0, 80))
       const stream = this.client.messages.stream({
         model: MODEL,
-        max_tokens: 1024,
+        max_tokens: 2048,
         system: systemPrompt,
         messages: [{ role: 'user', content: prompt }],
       })

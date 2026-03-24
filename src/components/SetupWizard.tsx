@@ -72,7 +72,7 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [] 
   const [language, setLanguage] = useState('English')
   const [simpleLanguage, setSimpleLanguage] = useState(false)
   const [extraContext, setExtraContext] = useState(DEFAULT_EXTRA_CONTEXT)
-  const [aiModel, setAiModel] = useState('claude-3-haiku')
+  const [aiModel, setAiModel] = useState('claude-sonnet')
   const [autoGenerate, setAutoGenerate] = useState(true)
 
   const [showSnapGrid, setShowSnapGrid] = useState(false)
@@ -363,12 +363,11 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [] 
                   <div className="ai-model-select">
                     <span className="setup-ai-icon">⚛️</span>
                     <span className="setup-ai-name">
-                      {aiModel === 'claude-3-haiku' && 'Claude 3.5 Haiku'}
-                      {aiModel === 'gpt-4o-mini' && 'GPT-4o Mini'}
-                      {aiModel === 'gpt-4o' && 'GPT-4o'}
+                      {aiModel === 'claude-sonnet' && 'Claude Sonnet 4.6'}
+                      {aiModel === 'claude-haiku' && 'Claude Haiku 4.5'}
                     </span>
-                    {aiModel === 'claude-3-haiku' && <span className="ai-badge">Recommended</span>}
-                    {aiModel === 'claude-3-haiku' && <span className="ai-speed">Fast</span>}
+                    {aiModel === 'claude-sonnet' && <span className="ai-badge">Recommended</span>}
+                    {aiModel === 'claude-haiku' && <span className="ai-speed">Fast</span>}
                     <span className="setup-ai-chevron">⌄</span>
                     <select
                       id="ai-model"
@@ -376,9 +375,8 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [] 
                       value={aiModel}
                       onChange={(e) => setAiModel(e.target.value)}
                     >
-                      <option value="claude-3-haiku">Claude 3.5 Haiku</option>
-                      <option value="gpt-4o-mini">GPT-4o Mini</option>
-                      <option value="gpt-4o">GPT-4o</option>
+                      <option value="claude-sonnet">Claude Sonnet 4.6</option>
+                      <option value="claude-haiku">Claude Haiku 4.5</option>
                     </select>
                   </div>
                 </div>

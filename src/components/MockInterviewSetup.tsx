@@ -75,7 +75,7 @@ export default function MockInterviewSetup({ onCreateSession, onBack, onDock, cv
       language: 'English',
       extraContext: 'This is a mock interview. Answer confidently and concisely.',
       autoGenerate: true,
-      aiModel: 'claude-3-haiku',
+      aiModel: 'claude-sonnet',
     })
   }
 

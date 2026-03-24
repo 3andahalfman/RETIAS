@@ -188,7 +188,7 @@ export default function AnswerPanel() {
                 <div className="answer-text">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkMath]}
-                    rehypePlugins={[rehypeKatex]}
+                    rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false, output: 'html' }]]}
                     components={{
                       code({ node, className, children, ...props }: any) {
                         const match = /language-(\w+)/.exec(className || '')
