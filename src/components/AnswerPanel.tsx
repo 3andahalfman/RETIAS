@@ -144,22 +144,19 @@ export default function AnswerPanel() {
 
   return (
     <div className="answer-panel" data-font-size={fontSizeIdx}>
-      {/* Row 1 — navigation */}
-      <div className="answer-nav-row">
-        <div className="answer-nav">
-          <button type="button" className="panel-action-btn" onClick={handlePrev} disabled={currentIdx <= 0} title="Previous answer">‹</button>
-          <span className="answer-nav-label">
-            {answers.length > 0 ? `${currentIdx + 1} / ${answers.length}` : '—'}
-          </span>
-          <button type="button" className="panel-action-btn" onClick={handleNext} disabled={currentIdx >= answers.length - 1} title="Next answer">›</button>
+      {/* Panel header — tab bar */}
+      <div className="panel-header-row">
+        <div className="panel-tabs">
+          <span className="panel-tab active">AI Answer</span>
+          <span className="panel-tab-sep" />
+          <button type="button" className="panel-tab" onClick={handlePrev} disabled={currentIdx <= 0} title="Previous answer">‹ History</button>
+          {hasNewerAnswer && (
+            <button type="button" className="panel-tab new-answer-hint" onClick={() => setCurrentIdx(answers.length - 1)} title="Jump to latest">↓ New</button>
+          )}
+          <span className="panel-tab-sep" />
+          <span className="panel-tab-count">{answers.length > 0 ? `${currentIdx + 1}/${answers.length}` : '—'}</span>
         </div>
-        {hasNewerAnswer && (
-          <button type="button" className="panel-action-btn new-answer-hint" onClick={() => setCurrentIdx(answers.length - 1)} title="Jump to latest answer">↓ New</button>
-        )}
-      </div>
-      {/* Row 2 — actions */}
-      <div className="answer-actions-row">
-        <div className="panel-actions">
+        <div className="panel-header-right">
           <button type="button" className="panel-action-btn" onClick={handleFontDecrease} title="Decrease text size" disabled={fontSizeIdx === 0}>A-</button>
           <button type="button" className="panel-action-btn" onClick={handleFontIncrease} title="Increase text size" disabled={fontSizeIdx === FONT_SIZES.length - 1}>A+</button>
           <span className="panel-action-divider" />

@@ -47,17 +47,24 @@ export default function TranscriptPanel() {
   return (
     <div className="transcript-panel">
       {/* Panel header */}
-      <div className="panel-subheader">
-        <label className="autoscroll-toggle">
-          <input
-            type="checkbox"
-            checked={autoScroll}
-            onChange={(e) => setAutoScroll(e.target.checked)}
-          />
-          <span className="autoscroll-slider" />
-          Auto-scroll
-        </label>
-        <div className="panel-actions">
+      <div className="panel-header-row">
+        <div className="panel-header-left">
+          <span className="panel-title">Live Transcript</span>
+          <span className="panel-mic-badge">
+            <span className="panel-mic-dot" />
+            Mic Active
+          </span>
+        </div>
+        <div className="panel-header-right">
+          <label className="autoscroll-toggle" title="Auto-scroll">
+            <input
+              type="checkbox"
+              aria-label="Auto-scroll"
+              checked={autoScroll}
+              onChange={(e) => setAutoScroll(e.target.checked)}
+            />
+            <span className="autoscroll-slider" />
+          </label>
           <button className="panel-action-btn" onClick={handleClear} title="Clear transcript">🗑</button>
         </div>
       </div>

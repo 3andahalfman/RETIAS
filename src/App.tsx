@@ -325,6 +325,8 @@ export default function App() {
           convState={convState}
           isPremium={user?.is_premium ?? false}
           isOnlineTest={isOnlineTest}
+          sessionCompany={sessionConfig?.company}
+          sessionRole={sessionConfig?.targetRole || sessionConfig?.jobDescription}
         />
 
         <div className="panels" ref={panelsRef}>
