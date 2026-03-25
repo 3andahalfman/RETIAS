@@ -2935,6 +2935,28 @@ html, body, #root {
 }
 .login-btn-google:hover:not(:disabled) { background: var(--glass-8); border-color: var(--border-light); }
 .login-btn-google:disabled { opacity: 0.4; cursor: not-allowed; }
+.login-pw-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  padding-left: 2px;
+}
+.login-pw-rule {
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+  transition: color 0.15s;
+}
+.login-pw-rule.pass { color: #34d399; }
+
+.login-field-hint {
+  font-size: 11px;
+  margin-top: 4px;
+}
+.login-field-hint.success { color: #34d399; }
+.login-field-hint.error   { color: #f87171; }
+.login-field-hint.muted   { color: rgba(255,255,255,0.35); }
+
 .login-error {
   font-size: 12px;
   color: var(--danger);
@@ -3136,11 +3158,12 @@ html, body, #root {
 
 /* ── Update Banner ── */
 .update-banner {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 10000;
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 10000;
   display: flex; align-items: center; gap: 10px;
   padding: 9px 16px;
-  background: #1a2a1a; border-bottom: 1px solid #2d5a2d;
+  background: #1a2a1a; border-top: 1px solid #2d5a2d;
   font-size: 13px; font-family: var(--font-sans);
+  border-radius: 0 0 12px 12px;
 }
 .update-banner-text { flex: 1; color: #8fca8f; }
 .update-banner-text strong { color: #b8e4b8; }
