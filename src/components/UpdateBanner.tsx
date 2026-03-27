@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 
 type UpdateState = 'idle' | 'available' | 'downloading' | 'ready'
 
+const UPDATE_KEY = 'retias_update_first_seen'
+
 export default function UpdateBanner() {
   const [state, setState] = useState<UpdateState>('idle')
   const [version, setVersion] = useState('')
@@ -15,6 +17,10 @@ export default function UpdateBanner() {
     api.onUpdateAvailable?.((v: string) => {
       setVersion(v)
       setState('available')
+      // Record first time this update was seen — used for forced-update gate after 2 days
+      if (!localStorage.getItem(UPDATE_KEY)) {
+        localStorage.setItem(UPDATE_KEY, JSON.stringify({ version: v, since: Date.now() }))
+      }
     })
 
     api.onUpdateProgress?.((pct: number) => {

@@ -1,6 +1,6 @@
 {
   "name": "retias",
-  "version": "1.6.3",
+  "version": "1.6.5",
   "description": "Real Time Interview Assistant Software \u00e2\u20ac\u201d AI-powered real-time coaching",
   "main": "dist/electron/main.js",
   "scripts": {
@@ -60,7 +60,8 @@
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "artifactName": "RETIAS-Setup.exe"
     },
     "directories": {
       "output": "release"

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 interface Props {
   onLogin: (user: User) => void
@@ -13,12 +13,24 @@ export default function LoginPage({ onLogin, isDocked, onDock, onUndock }: Props
   const [tab, setTab] = useState<Tab>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [pwFocused, setPwFocused] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleAvailable, setGoogleAvailable] = useState(false)
   const [snapOpen, setSnapOpen] = useState(false)
+  const [nameStatus, setNameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle')
+  const nameDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const strengthRules = [
+    { label: 'At least 8 characters',     pass: password.length >= 8 },
+    { label: 'One uppercase letter (A–Z)', pass: /[A-Z]/.test(password) },
+    { label: 'One number (0–9)',           pass: /[0-9]/.test(password) },
+  ]
+  const allRulesPass   = strengthRules.every(r => r.pass)
+  const passwordsMatch = password === confirm
 
   useEffect(() => {
     window.electronAPI?.authGoogleAvailable?.().then(setGoogleAvailable).catch(() => {})
@@ -26,6 +38,18 @@ export default function LoginPage({ onLogin, isDocked, onDock, onUndock }: Props
 
 
   const clearError = () => setError('')
+
+  useEffect(() => {
+    if (tab !== 'register' || displayName.trim().length < 2) { setNameStatus('idle'); return }
+    setNameStatus('checking')
+    if (nameDebounce.current) clearTimeout(nameDebounce.current)
+    nameDebounce.current = setTimeout(async () => {
+      try {
+        const available = await window.electronAPI?.authCheckUsername?.(displayName.trim())
+        setNameStatus(available ? 'available' : 'taken')
+      } catch { setNameStatus('idle') }
+    }, 500)
+  }, [displayName, tab])
 
   const friendlyAuthError = (err: any): string => {
     const msg: string = (err?.message ?? '').toLowerCase()
@@ -58,9 +82,12 @@ export default function LoginPage({ onLogin, isDocked, onDock, onUndock }: Props
   }
 
   const handleRegister = async () => {
-    if (!email.trim()) { setError('Please enter your email.'); return }
-    if (!password) { setError('Please enter a password.'); return }
-    if (password.length < 8) { setError('Password must be at least 8 characters.'); return }
+    if (!email.trim())        { setError('Please enter your email.'); return }
+    if (!displayName.trim())  { setError('Please enter a display name.'); return }
+    if (nameStatus === 'taken')      { setError('That display name is already taken.'); return }
+    if (nameStatus !== 'available')  { setError('Please wait for name availability check.'); return }
+    if (!allRulesPass)        { setError('Password does not meet the requirements.'); return }
+    if (!passwordsMatch)      { setError('Passwords do not match.'); return }
     setLoading(true)
     setError('')
     try {
@@ -182,14 +209,14 @@ export default function LoginPage({ onLogin, isDocked, onDock, onUndock }: Props
             <button
               type="button"
               className={`login-tab ${tab === 'signin' ? 'active' : ''}`}
-              onClick={() => { setTab('signin'); clearError() }}
+              onClick={() => { setTab('signin'); clearError(); setConfirm(''); setNameStatus('idle') }}
             >
               Sign In
             </button>
             <button
               type="button"
               className={`login-tab ${tab === 'register' ? 'active' : ''}`}
-              onClick={() => { setTab('register'); clearError() }}
+              onClick={() => { setTab('register'); clearError(); setConfirm(''); setNameStatus('idle') }}
             >
               Create Account
             </button>
@@ -210,6 +237,13 @@ export default function LoginPage({ onLogin, isDocked, onDock, onUndock }: Props
                   onKeyDown={handleKeyDown}
                   autoComplete="name"
                 />
+                {displayName.trim().length >= 2 && (
+                  <div className={`login-field-hint ${nameStatus === 'available' ? 'success' : nameStatus === 'taken' ? 'error' : 'muted'}`}>
+                    {nameStatus === 'checking'  && '⋯ Checking…'}
+                    {nameStatus === 'available' && '✓ Name is available'}
+                    {nameStatus === 'taken'     && '✗ Name is already taken'}
+                  </div>
+                )}
               </div>
             )}
 
@@ -234,9 +268,11 @@ export default function LoginPage({ onLogin, isDocked, onDock, onUndock }: Props
                   id="login-password"
                   className="login-input login-input-pw"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder={tab === 'register' ? 'Min. 8 characters' : 'Your password'}
+                  placeholder={tab === 'register' ? 'Min. 8 chars, 1 uppercase, 1 number' : 'Your password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onFocus={() => setPwFocused(true)}
+                  onBlur={() => setPwFocused(false)}
                   onKeyDown={handleKeyDown}
                   autoComplete="current-password"
                 />
@@ -249,7 +285,37 @@ export default function LoginPage({ onLogin, isDocked, onDock, onUndock }: Props
                   {showPassword ? '🙈' : '👁'}
                 </button>
               </div>
+              {tab === 'register' && (pwFocused || password.length > 0) && (
+                <div className="login-pw-rules">
+                  {strengthRules.map(r => (
+                    <div key={r.label} className={`login-pw-rule ${r.pass ? 'pass' : ''}`}>
+                      {r.pass ? '✓' : '○'} {r.label}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+
+            {tab === 'register' && (
+              <div className="login-field">
+                <label className="login-field-label" htmlFor="login-confirm">Confirm Password</label>
+                <input
+                  id="login-confirm"
+                  className="login-input"
+                  type="password"
+                  placeholder="Re-enter your password"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  autoComplete="new-password"
+                />
+                {confirm.length > 0 && (
+                  <div className={`login-field-hint ${passwordsMatch ? 'success' : 'error'}`}>
+                    {passwordsMatch ? '✓ Passwords match.' : '✗ Passwords do not match.'}
+                  </div>
+                )}
+              </div>
+            )}
 
             {error && <div className="login-error">{error}</div>}
 

@@ -2,6 +2,7 @@ interface SidebarProps {
   activeItem: 'dashboard' | 'sessions' | 'cv-manager' | 'settings'
   user: User
   onNavigate: (item: 'dashboard' | 'sessions' | 'cv-manager' | 'settings') => void
+  onLogout?: () => void
 }
 
 const navItems: { id: 'dashboard' | 'sessions' | 'cv-manager' | 'settings'; label: string; icon: string }[] = [
@@ -11,7 +12,7 @@ const navItems: { id: 'dashboard' | 'sessions' | 'cv-manager' | 'settings'; labe
   { id: 'settings',  label: 'Settings',  icon: '⚙' },
 ]
 
-export default function Sidebar({ activeItem, user, onNavigate }: SidebarProps) {
+export default function Sidebar({ activeItem, user, onNavigate, onLogout }: SidebarProps) {
   const initials = (user.display_name || user.email || '?').slice(0, 2).toUpperCase()
 
   return (
@@ -52,15 +53,22 @@ export default function Sidebar({ activeItem, user, onNavigate }: SidebarProps) 
         </div>
       )}
 
-      <div className="sidebar-profile">
-        <div className="sidebar-avatar">{initials}</div>
-        <div className="sidebar-profile-info">
-          <div className="sidebar-profile-name">
-            {user.display_name || user.email}
-            {user.is_premium && <span className="sidebar-pro-badge">PRO</span>}
+      <div className="sidebar-profile-card">
+        <div className="sidebar-profile">
+          <div className="sidebar-avatar">{initials}</div>
+          <div className="sidebar-profile-info">
+            <div className="sidebar-profile-name">
+              {user.display_name || user.email}
+              {user.is_premium && <span className="sidebar-pro-badge">PRO</span>}
+            </div>
+            <div className="sidebar-profile-email">{user.email}</div>
           </div>
-          <div className="sidebar-profile-email">{user.email}</div>
         </div>
+        {onLogout && (
+          <button type="button" className="sidebar-signout-btn" onClick={onLogout}>
+            Sign Out
+          </button>
+        )}
       </div>
     </div>
   )

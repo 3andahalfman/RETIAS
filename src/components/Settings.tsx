@@ -61,6 +61,7 @@ export default function Settings({ user, onLogout, onUserUpdate }: Props) {
   const [displayName, setDisplayName] = useState(user.display_name || '')
   const [savingName, setSavingName] = useState(false)
   const [clearConfirm, setClearConfirm] = useState(false)
+  const [clearDone, setClearDone] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [snapOpen, setSnapOpen] = useState(false)
   const snapRef = useRef<HTMLDivElement>(null)
@@ -106,6 +107,8 @@ export default function Settings({ user, onLogout, onUserUpdate }: Props) {
   const handleClearSessions = async () => {
     await window.electronAPI?.clearAllSessions?.()
     setClearConfirm(false)
+    setClearDone(true)
+    setTimeout(() => setClearDone(false), 3000)
   }
 
   // suppress unused warning
@@ -382,7 +385,9 @@ export default function Settings({ user, onLogout, onUserUpdate }: Props) {
                   <div className="settings-danger-title">Clear All Session Data</div>
                   <div className="settings-danger-desc">Permanently delete all past sessions, transcripts and Q&A history. This cannot be undone.</div>
                 </div>
-                {clearConfirm ? (
+                {clearDone ? (
+                  <span className="settings-clear-done">✓ Cleared</span>
+                ) : clearConfirm ? (
                   <div className="settings-confirm-row">
                     <span className="settings-confirm-text">Are you sure?</span>
                     <button type="button" className="settings-btn-ghost" onClick={() => setClearConfirm(false)}>Cancel</button>

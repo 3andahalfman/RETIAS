@@ -226,7 +226,7 @@ export default function App() {
       <div className="app-root">
         <UpdateBanner />
         <div className="page-layout">
-          <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} />
+          <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} />
           <div className="page-main">
             <Dashboard
               onNewSession={() => setView('setup')}
@@ -249,7 +249,7 @@ export default function App() {
     return (
       <div className="app-root">
         <div className="page-layout">
-          <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} />
+          <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} />
           <div className="page-main">
             <MockInterviewSetup
               onCreateSession={handleCreateSession}
@@ -267,7 +267,7 @@ export default function App() {
     return (
       <div className="app-root">
         <div className="page-layout">
-          <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} />
+          <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} />
           <div className="page-main">
             <SetupWizard
               onCreateSession={handleCreateSession}
@@ -297,7 +297,7 @@ export default function App() {
     return (
       <div className="app-root">
         <div className="page-layout">
-          <Sidebar activeItem="cv-manager" user={user} onNavigate={handleSidebarNavigate} />
+          <Sidebar activeItem="cv-manager" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} />
           <div className="page-main">
             <CvManager
               cvs={cvs}
@@ -314,7 +314,7 @@ export default function App() {
     return (
       <div className="app-root">
         <div className="page-layout">
-          <Sidebar activeItem="sessions" user={user} onNavigate={handleSidebarNavigate} />
+          <Sidebar activeItem="sessions" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} />
           <div className="page-main">
             <PastSessions
               onNewSession={() => setView('setup')}
@@ -330,7 +330,7 @@ export default function App() {
     return (
       <div className="app-root">
         <div className="page-layout">
-          <Sidebar activeItem="settings" user={user} onNavigate={handleSidebarNavigate} />
+          <Sidebar activeItem="settings" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} />
           <div className="page-main">
             <Settings
               user={user}

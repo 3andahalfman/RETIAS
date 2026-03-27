@@ -175,10 +175,12 @@ html, body, #root {
   transition: box-shadow 0.2s;
 }
 .sidebar-upgrade-btn:hover { box-shadow: 0 0 24px rgba(79,128,226,0.50); }
-.sidebar-profile {
-  display:flex; align-items:center; gap:10px; padding:10px 8px 4px;
+.sidebar-profile-card {
   border-top:1px solid #1A2540; margin-top:4px;
+  padding: 10px 8px 10px;
+  display: flex; flex-direction: column; gap: 8px;
 }
+.sidebar-profile { display:flex; align-items:center; gap:10px; }
 .sidebar-avatar {
   width:32px; height:32px; border-radius:50%; flex-shrink:0;
   background:linear-gradient(135deg, #2A3FBF, #4F80E2);
@@ -188,6 +190,14 @@ html, body, #root {
 .sidebar-profile-info { flex:1; min-width:0; }
 .sidebar-profile-name { font-size:12px; font-weight:600; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .sidebar-profile-email { font-size:10px; color:rgba(255,255,255,0.40); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sidebar-signout-btn {
+  width: 100%; padding: 7px 0;
+  background: transparent; border: 1px solid rgba(248,113,113,0.35);
+  border-radius: var(--radius-pill); color: #f87171;
+  font-size: 12px; font-weight: 500; cursor: pointer;
+  transition: background 0.15s;
+}
+.sidebar-signout-btn:hover { background: rgba(248,113,113,0.10); }
 
 /* ── App Root ── */
 .app-root {
@@ -3156,6 +3166,34 @@ html, body, #root {
 .tutorial-btn.secondary:hover:not(:disabled) { background: rgba(255,255,255,0.10); color: #fff; }
 .tutorial-btn:disabled { opacity: 0.30; cursor: not-allowed; }
 
+/* ── Force Update Gate ── */
+.force-update-overlay {
+  position: fixed; inset: 0; z-index: 20000;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(6, 10, 20, 0.85);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.force-update-card {
+  background: #0D1830; border: 1px solid #1A2540;
+  border-radius: 16px; padding: 36px 40px;
+  width: 380px; text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+.force-update-icon { font-size: 40px; margin-bottom: 16px; }
+.force-update-title { font-size: 18px; font-weight: 700; color: #fff; margin: 0 0 12px; }
+.force-update-body { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin: 0 0 24px; }
+.force-update-btn {
+  width: 100%; padding: 11px 0; border-radius: 8px; border: none; cursor: pointer;
+  font-size: 14px; font-weight: 600; font-family: var(--font-sans);
+  background: linear-gradient(135deg, #2A3FBF, #4F80E2); color: #fff;
+  transition: opacity 0.15s;
+}
+.force-update-btn:hover { opacity: 0.88; }
+.force-update-progress-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.force-update-progress-wrap .update-banner-bar { width: 100%; }
+.force-update-pct { font-size: 12px; color: var(--text-muted); }
+
 /* ── Update Banner ── */
 .update-banner {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 10000;
@@ -4844,6 +4882,7 @@ html, body, #root {
 .settings-danger-desc { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 .settings-confirm-row { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .settings-confirm-text { font-size: 12px; color: #f87171; }
+.settings-clear-done { font-size: 12px; color: #15CDCA; }
 /* About card */
 .settings-about-card {
   display: flex;

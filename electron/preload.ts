@@ -89,6 +89,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeAllListeners: (channel: string) => ipcRenderer.removeAllListeners(channel),
 
   // Auth
+  authCheckUsername: (displayName: string) => ipcRenderer.invoke('auth:check-username', displayName),
   authRegister: (email: string, password: string, displayName: string) => ipcRenderer.invoke('auth:register', email, password, displayName),
   authLogin: (email: string, password: string) => ipcRenderer.invoke('auth:login', email, password),
   authGoogleAvailable: () => ipcRenderer.invoke('auth:google-available'),

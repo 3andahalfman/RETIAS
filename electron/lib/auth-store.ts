@@ -28,11 +28,29 @@ function mapUser(u: SupabaseUser): User {
   }
 }
 
+export async function checkUsernameAvailable(displayName: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('profiles')
+    .select('id')
+    .ilike('display_name', displayName.trim())
+    .maybeSingle()
+  return !data
+}
+
 export async function createUser(
   email: string,
   password: string,
   displayName: string
 ): Promise<User> {
+  // Password strength
+  if (password.length < 8)        throw new Error('Password must be at least 8 characters.')
+  if (!/[A-Z]/.test(password))    throw new Error('Password must contain at least one uppercase letter.')
+  if (!/[0-9]/.test(password))    throw new Error('Password must contain at least one number.')
+
+  // Unique display name
+  const available = await checkUsernameAvailable(displayName)
+  if (!available) throw new Error('That display name is already taken. Please choose another.')
+
   const { data, error } = await supabase.auth.signUp({
     email: email.toLowerCase().trim(),
     password,
@@ -42,6 +60,17 @@ export async function createUser(
   })
   if (error) throw new Error(error.message)
   if (!data.user) throw new Error('Registration failed — check your email to confirm your account')
+
+  // Reserve the display name in the profiles table
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .insert({ id: data.user.id, display_name: displayName.trim() || email })
+
+  if (profileError && profileError.code !== '23505') {
+    // Non-fatal — auth account was created, profile insert failed
+    console.error('[auth-store] profile insert error:', profileError.message)
+  }
+
   return mapUser(data.user)
 }
 

@@ -252,8 +252,7 @@ export async function deleteSession(sessionId: string, userId?: string): Promise
 }
 
 export async function clearAllSessions(userId?: string): Promise<void> {
-  let query = supabase.from('past_sessions').delete().neq('id', '')
-  if (userId) query = query.eq('user_id', userId)
-  const { error } = await query
+  if (!userId) return
+  const { error } = await supabase.from('past_sessions').delete().eq('user_id', userId)
   if (error) console.error('[session-store] clearAllSessions error:', error.message)
 }

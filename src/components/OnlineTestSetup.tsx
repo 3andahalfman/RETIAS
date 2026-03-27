@@ -68,17 +68,35 @@ const ROLE_TYPES = [
 
 export default function OnlineTestSetup({ onStart, onBack, onDock }: Props) {
   const [selected, setSelected] = useState<string | null>(null)
+  const [showSnapGrid, setShowSnapGrid] = useState(false)
 
   return (
     <div className="setup-root online-test-root">
       {/* Topbar */}
-      <div className="setup-topbar">
-        <div className="setup-topbar-left">
-          <img src="./logo.svg" alt="RETIAS" className="setup-logo" />
-          <span className="setup-brand-name">RETIAS</span>
+      <div className="setup-inner-topbar">
+        <div className="setup-inner-topbar-left">
+          <button type="button" className="setup-breadcrumb-btn" onClick={onBack}>
+            ← Back to Dashboard
+          </button>
         </div>
-        <div className="setup-topbar-right">
-          <button type="button" className="setup-window-btn" title="Back to Dashboard" onClick={onBack}>←</button>
+        <div className="setup-inner-topbar-right">
+          <div className="snap-btn-wrapper">
+            <button type="button" className="setup-window-btn" title="Snap layout" onClick={() => setShowSnapGrid(!showSnapGrid)}>✥</button>
+            {showSnapGrid && (
+              <div className="snap-grid-dropdown">
+                <div className="snap-grid-row">
+                  <button type="button" className="snap-grid-cell" title="Top Left"    onClick={() => { window.electronAPI?.snapWindow('tl'); setShowSnapGrid(false) }} />
+                  <button type="button" className="snap-grid-cell" title="Top Middle"  onClick={() => { window.electronAPI?.snapWindow('tm'); setShowSnapGrid(false) }} />
+                  <button type="button" className="snap-grid-cell" title="Top Right"   onClick={() => { window.electronAPI?.snapWindow('tr'); setShowSnapGrid(false) }} />
+                </div>
+                <div className="snap-grid-row">
+                  <button type="button" className="snap-grid-cell" title="Bottom Left"   onClick={() => { window.electronAPI?.snapWindow('bl'); setShowSnapGrid(false) }} />
+                  <button type="button" className="snap-grid-cell" title="Bottom Middle" onClick={() => { window.electronAPI?.snapWindow('bm'); setShowSnapGrid(false) }} />
+                  <button type="button" className="snap-grid-cell" title="Bottom Right"  onClick={() => { window.electronAPI?.snapWindow('br'); setShowSnapGrid(false) }} />
+                </div>
+              </div>
+            )}
+          </div>
           <button type="button" className="setup-window-btn" title="Dock" onClick={onDock}>↙</button>
           <button type="button" className="setup-window-btn close" title="Close" onClick={() => window.electronAPI?.closeWindow()}>✕</button>
         </div>
