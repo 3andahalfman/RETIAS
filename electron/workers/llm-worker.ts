@@ -431,6 +431,10 @@ export class LLMWorker {
   private currentStream: any = null
   private lastContext: { systemPrompt: string; userMessage: string; questionText: string; questionType: string } | null = null
 
+  // Session memory — accumulated across all screen analyses and manual prompts
+  private conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = []
+  private readonly MAX_HISTORY = 20 // 10 turns
+
   // Stored handler references for proper cleanup
   private contextHandler: ((systemPrompt: string, userMessage: string, questionText: string, questionType: string) => void) | null = null
   private regenerateHandler: (() => void) | null = null
@@ -465,9 +469,11 @@ export class LLMWorker {
 
     this.ipcBus.on('session:started', (config: { testType?: string }) => {
       this.sessionTestType = config?.testType ?? null
+      this.conversationHistory = []
     })
     this.ipcBus.on('session:stopped', () => {
       this.sessionTestType = null
+      this.conversationHistory = []
     })
     this.ipcBus.on('context:ready', this.contextHandler)
     this.ipcBus.on('overlay:regenerate', this.regenerateHandler)
@@ -562,32 +568,40 @@ export class LLMWorker {
   private async analyseScreen(base64Image: string) {
     if (this.isGenerating) this.abortCurrent()
 
-    const questionText = 'Screen Analysis'
     const questionType = 'general'
+    const timestamp = new Date().toLocaleTimeString()
 
-    // Use screen:card (not question:detected) so context-builder doesn't treat this
-    // as an interview question and overwrite the vision API answer with a CV-profile answer
-    this.ipcBus.emit('screen:card', questionText, questionType)
+    // Use screen:card so context-builder doesn't treat this as an interview question
+    this.ipcBus.emit('screen:card', 'Screen Analysis', questionType)
 
     this.isGenerating = true
     let fullResponse = ''
 
     try {
-      console.log('[LLMWorker] Analysing screen with vision...')
-      const stream = this.client.messages.stream({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 6000,
-        system: getScreenAnalysisPrompt(this.sessionTestType),
-        messages: [{
+      const hasHistory = this.conversationHistory.length > 0
+      const userText = hasHistory
+        ? 'New screenshot captured. Based on our session so far, continue helping me. Solve all questions visible on this screen.'
+        : 'Solve all questions shown on this screen.'
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const messages: any[] = [
+        // Text-only history gives Claude context of prior Q&A without re-sending images
+        ...this.conversationHistory,
+        {
           role: 'user',
           content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: 'image/png', data: base64Image },
-            },
-            { type: 'text', text: 'Solve all questions shown on this screen.' },
+            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: base64Image } },
+            { type: 'text', text: userText },
           ],
-        }],
+        },
+      ]
+
+      console.log(`[LLMWorker] Analysing screen (history: ${this.conversationHistory.length} msgs)`)
+      const stream = this.client.messages.stream({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4096,
+        system: getScreenAnalysisPrompt(this.sessionTestType),
+        messages,
       })
       this.currentStream = stream
 
@@ -602,7 +616,13 @@ export class LLMWorker {
       this.ipcBus.emit('llm:done')
 
       if (fullResponse) {
-        await this.cache.set(questionText + '_screen_' + Date.now(), questionType, fullResponse)
+        // Store text summary in history (not the image — too large)
+        this.conversationHistory.push({ role: 'user', content: `[Screenshot at ${timestamp}] ${userText}` })
+        this.conversationHistory.push({ role: 'assistant', content: fullResponse })
+        if (this.conversationHistory.length > this.MAX_HISTORY) {
+          this.conversationHistory = this.conversationHistory.slice(-this.MAX_HISTORY)
+        }
+        await this.cache.set('Screen_' + Date.now(), questionType, fullResponse)
       }
     } catch (err: any) {
       const isAbort = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort')
@@ -619,26 +639,40 @@ export class LLMWorker {
 
   private async analyseScreenMulti(images: string[]) {
     if (this.isGenerating) this.abortCurrent()
-    this.ipcBus.emit('screen:card', 'Screen Analysis', 'general')
+    this.ipcBus.emit('screen:card', `Screen Analysis (${images.length} screenshots)`, 'general')
     this.isGenerating = true
     let fullResponse = ''
+    const timestamp = new Date().toLocaleTimeString()
+
     try {
-      console.log(`[LLMWorker] Analysing ${images.length} screenshots with vision...`)
+      const hasHistory = this.conversationHistory.length > 0
+      const userText = hasHistory
+        ? `${images.length} new screenshot(s) captured. Based on our session so far, continue helping me. Solve all questions visible across these screens.`
+        : `Solve all questions shown across these ${images.length} screenshots.`
+
       const imageBlocks = images.map(data => ({
         type: 'image' as const,
         source: { type: 'base64' as const, media_type: 'image/png' as const, data },
       }))
-      const stream = this.client.messages.stream({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 6000,
-        system: getScreenAnalysisPrompt(this.sessionTestType),
-        messages: [{
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const messages: any[] = [
+        ...this.conversationHistory,
+        {
           role: 'user',
           content: [
             ...imageBlocks,
-            { type: 'text', text: `Solve all questions shown across these ${images.length} screenshots.` },
+            { type: 'text', text: userText },
           ],
-        }],
+        },
+      ]
+
+      console.log(`[LLMWorker] Analysing ${images.length} screenshots (history: ${this.conversationHistory.length} msgs)`)
+      const stream = this.client.messages.stream({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4096,
+        system: getScreenAnalysisPrompt(this.sessionTestType),
+        messages,
       })
       this.currentStream = stream
       for await (const event of stream) {
@@ -649,13 +683,18 @@ export class LLMWorker {
       }
       this.ipcBus.emit('llm:done')
       if (fullResponse) {
+        this.conversationHistory.push({ role: 'user', content: `[${images.length} screenshot(s) at ${timestamp}] ${userText}` })
+        this.conversationHistory.push({ role: 'assistant', content: fullResponse })
+        if (this.conversationHistory.length > this.MAX_HISTORY) {
+          this.conversationHistory = this.conversationHistory.slice(-this.MAX_HISTORY)
+        }
         await this.cache.set('ScreenMulti_' + Date.now(), 'general', fullResponse)
       }
     } catch (err: any) {
       const isAbort = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort')
       if (!isAbort) {
         console.error('[LLMWorker] Multi-screen analysis error:', err?.message)
-        this.ipcBus.emit('llm:token', '\n\n⚠️ Screen analysis failed. Please try again.')
+        this.ipcBus.emit('llm:token', `\n\n⚠️ Failed to analyse ${images.length} screenshot(s). Try fewer screenshots or use single capture.`)
         this.ipcBus.emit('llm:done')
       }
     } finally {
@@ -672,19 +711,25 @@ export class LLMWorker {
       ?? (this.sessionTestType ? getScreenAnalysisPrompt(this.sessionTestType) : null)
       ?? 'You are an expert AI assistant. Answer the user\'s question clearly, concisely, and accurately.'
 
-    // Show the user's question as the card title in the answer panel
     const shortTitle = prompt.length > 60 ? prompt.slice(0, 57) + '…' : prompt
     this.ipcBus.emit('screen:card', shortTitle, 'manual')
 
     this.isGenerating = true
     let fullResponse = ''
     try {
-      console.log('[LLMWorker] Manual prompt:', prompt.slice(0, 80))
+      // Build messages with full session history so the AI knows what's been asked before
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const messages: any[] = [
+        ...this.conversationHistory,
+        { role: 'user', content: prompt },
+      ]
+
+      console.log(`[LLMWorker] Manual prompt (history: ${this.conversationHistory.length} msgs):`, prompt.slice(0, 80))
       const stream = this.client.messages.stream({
         model: MODEL,
         max_tokens: 2048,
         system: systemPrompt,
-        messages: [{ role: 'user', content: prompt }],
+        messages,
       })
       this.currentStream = stream
       for await (const event of stream) {
@@ -695,6 +740,11 @@ export class LLMWorker {
       }
       this.ipcBus.emit('llm:done')
       if (fullResponse) {
+        this.conversationHistory.push({ role: 'user', content: prompt })
+        this.conversationHistory.push({ role: 'assistant', content: fullResponse })
+        if (this.conversationHistory.length > this.MAX_HISTORY) {
+          this.conversationHistory = this.conversationHistory.slice(-this.MAX_HISTORY)
+        }
         await this.cache.set('Manual_' + Date.now(), 'manual', fullResponse)
       }
     } catch (err: any) {

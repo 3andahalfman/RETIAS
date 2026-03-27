@@ -236,7 +236,7 @@ async function bootstrap() {
     if (!currentUserIsPremium) throw new Error('Screen Analysis is a premium feature. Upgrade your account to use it.')
     const sources = await desktopCapturer.getSources({
       types: ['screen'],
-      thumbnailSize: { width: 1920, height: 1080 },
+      thumbnailSize: { width: 1280, height: 720 },
     })
     const source = sources[0]
     if (!source) throw new Error('No screen source found')
@@ -250,7 +250,7 @@ async function bootstrap() {
     if (!currentUserIsPremium) throw new Error('Screen Analysis is a premium feature. Upgrade your account to use it.')
     const sources = await desktopCapturer.getSources({
       types: ['screen'],
-      thumbnailSize: { width: 1920, height: 1080 },
+      thumbnailSize: { width: 1280, height: 720 },
     })
     const source = sources[0]
     if (!source) throw new Error('No screen source found')
@@ -325,6 +325,11 @@ async function bootstrap() {
   })
 
   // ── Auth handlers ──────────────────────────────────────────────────────────
+
+  ipcMain.handle('auth:check-username', async (_e, displayName: string) => {
+    const { checkUsernameAvailable } = await import('./lib/auth-store.js')
+    return checkUsernameAvailable(displayName)
+  })
 
   ipcMain.handle('auth:register', async (_e, email: string, password: string, displayName: string) => {
     const safeEmail = clamp(requireString(email, 'Email'), LIMITS.email, 'email')
