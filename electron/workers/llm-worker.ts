@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 import { IpcBus } from '../ipc-bus.js'
 import { AnswerCache } from '../lib/cache.js'
 
@@ -7,12 +8,16 @@ import { AnswerCache } from '../lib/cache.js'
  *
  * 1. Checks SQLite cache first (SHA-256 hash of normalized question)
  * 2. Cache hit → emit tokens instantly (~100ms)
- * 3. Cache miss → stream from Claude, store result when done
+ * 3. Cache miss → stream from selected model (Claude or GPT), store result when done
  * 4. On question:update (compound question continuation) → abort current stream + restart
  */
 
-const MODEL = 'claude-sonnet-4-6'
+const DEFAULT_MODEL = 'claude-sonnet-4-6'
 const MAX_TOKENS = 1200
+
+function isOpenAIModel(model: string) {
+  return model.startsWith('gpt-') || model.startsWith('o1') || model.startsWith('o3')
+}
 
 function getScreenAnalysisPrompt(testType: string | null): string {
   const FORMAT = `
@@ -423,12 +428,15 @@ ${FORMAT}`
 
 export class LLMWorker {
   private ipcBus: IpcBus
-  private client: Anthropic
+  private anthropic: Anthropic
+  private openai: OpenAI
   private cache: AnswerCache
   private isGenerating = false
+  private activeModel: string = DEFAULT_MODEL
   private sessionTestType: string | null = null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private currentStream: any = null
+  private abortController: AbortController | null = null
   private lastContext: { systemPrompt: string; userMessage: string; questionText: string; questionType: string } | null = null
 
   // Session memory — accumulated across all screen analyses and manual prompts
@@ -442,14 +450,21 @@ export class LLMWorker {
   constructor(ipcBus: IpcBus) {
     this.ipcBus = ipcBus
 
-    const apiKey = process.env.ANTHROPIC_API_KEY || ''
-    if (!apiKey || apiKey === 'your_anthropic_api_key_here') {
-      console.error('[LLMWorker] ❌ ANTHROPIC_API_KEY is missing or placeholder!')
+    const anthropicKey = process.env.ANTHROPIC_API_KEY || ''
+    if (!anthropicKey || anthropicKey === 'your_anthropic_api_key_here') {
+      console.warn('[LLMWorker] ⚠️ ANTHROPIC_API_KEY is missing or placeholder')
     } else {
-      console.log('[LLMWorker] ✅ API key loaded')
+      console.log('[LLMWorker] ✅ Anthropic API key loaded')
     }
+    this.anthropic = new Anthropic({ apiKey: anthropicKey })
 
-    this.client = new Anthropic({ apiKey })
+    const openaiKey = process.env.OPENAI_API_KEY || ''
+    if (!openaiKey || openaiKey === 'your_openai_api_key_here') {
+      console.warn('[LLMWorker] ⚠️ OPENAI_API_KEY is missing or placeholder')
+    } else {
+      console.log('[LLMWorker] ✅ OpenAI API key loaded')
+    }
+    this.openai = new OpenAI({ apiKey: openaiKey })
 
     this.cache = new AnswerCache()
 
@@ -467,9 +482,11 @@ export class LLMWorker {
       this.generate(systemPrompt, userMessage, questionText, questionType, true)
     }
 
-    this.ipcBus.on('session:started', (config: { testType?: string }) => {
+    this.ipcBus.on('session:started', (config: { testType?: string; aiModel?: string }) => {
       this.sessionTestType = config?.testType ?? null
+      if (config?.aiModel) this.activeModel = config.aiModel
       this.conversationHistory = []
+      console.log(`[LLMWorker] Session started — model: ${this.activeModel}`)
     })
     this.ipcBus.on('session:stopped', () => {
       this.sessionTestType = null
@@ -484,10 +501,16 @@ export class LLMWorker {
 
   /** Abort the active stream if one is running, returns true if aborted */
   private abortCurrent(): boolean {
-    if (this.isGenerating && this.currentStream) {
+    if (this.isGenerating) {
       console.log('[LLMWorker] Aborting current stream for refresh...')
-      this.currentStream.abort()
-      this.currentStream = null
+      if (this.currentStream) {
+        try { this.currentStream.abort() } catch (_) {}
+        this.currentStream = null
+      }
+      if (this.abortController) {
+        this.abortController.abort()
+        this.abortController = null
+      }
       this.isGenerating = false
       return true
     }
@@ -522,20 +545,42 @@ export class LLMWorker {
     let fullResponse = ''
 
     try {
-      console.log('[LLMWorker] Calling Claude...')
-      const stream = this.client.messages.stream({
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-      })
-      this.currentStream = stream
+      if (isOpenAIModel(this.activeModel)) {
+        console.log(`[LLMWorker] Calling OpenAI (${this.activeModel})...`)
+        this.abortController = new AbortController()
+        const stream = await this.openai.chat.completions.create({
+          model: this.activeModel,
+          max_tokens: MAX_TOKENS,
+          stream: true,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+        }, { signal: this.abortController.signal })
 
-      for await (const event of stream) {
-        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-          const token = event.delta.text
-          fullResponse += token
-          this.ipcBus.emit('llm:token', token)
+        for await (const chunk of stream) {
+          const token = chunk.choices[0]?.delta?.content ?? ''
+          if (token) {
+            fullResponse += token
+            this.ipcBus.emit('llm:token', token)
+          }
+        }
+      } else {
+        console.log(`[LLMWorker] Calling Claude (${this.activeModel})...`)
+        const stream = this.anthropic.messages.stream({
+          model: this.activeModel,
+          max_tokens: MAX_TOKENS,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userMessage }],
+        })
+        this.currentStream = stream
+
+        for await (const event of stream) {
+          if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+            const token = event.delta.text
+            fullResponse += token
+            this.ipcBus.emit('llm:token', token)
+          }
         }
       }
 
@@ -548,7 +593,7 @@ export class LLMWorker {
       }
     } catch (err: any) {
       // If aborted (for a refresh), silently discard — new generation will follow
-      const isAbort = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort') || err?.status === 'user_abort'
+      const isAbort = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort') || err?.status === 'user_abort' || err?.code === 'ERR_CANCELED'
       if (isAbort) {
         console.log('[LLMWorker] Stream aborted for refresh — new generation pending')
         return
@@ -556,11 +601,12 @@ export class LLMWorker {
       const status  = err?.status ?? err?.statusCode ?? 'unknown'
       const message = err?.message ?? String(err)
       const errType = err?.error?.type ?? ''
-      console.error(`[LLMWorker] Claude error ${status} ${errType}: ${message}`)
+      console.error(`[LLMWorker] LLM error ${status} ${errType}: ${message}`)
       this.ipcBus.emit('llm:token', `\n\n⚠️ Error generating answer (${status}: ${errType || message})`)
       this.ipcBus.emit('llm:done')
     } finally {
       this.currentStream = null
+      this.abortController = null
       this.isGenerating = false
     }
   }
@@ -596,20 +642,48 @@ export class LLMWorker {
         },
       ]
 
-      console.log(`[LLMWorker] Analysing screen (history: ${this.conversationHistory.length} msgs)`)
-      const stream = this.client.messages.stream({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
-        system: getScreenAnalysisPrompt(this.sessionTestType),
-        messages,
-      })
-      this.currentStream = stream
+      console.log(`[LLMWorker] Analysing screen (model: ${this.activeModel}, history: ${this.conversationHistory.length} msgs)`)
+      const systemPrompt = getScreenAnalysisPrompt(this.sessionTestType)
 
-      for await (const event of stream) {
-        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-          const token = event.delta.text
-          fullResponse += token
-          this.ipcBus.emit('llm:token', token)
+      if (isOpenAIModel(this.activeModel)) {
+        this.abortController = new AbortController()
+        // OpenAI vision format: image_url blocks
+        const openaiMessages: any[] = [
+          ...this.conversationHistory.map(m => ({ role: m.role, content: m.content })),
+          {
+            role: 'user' as const,
+            content: [
+              { type: 'image_url', image_url: { url: `data:image/png;base64,${base64Image}`, detail: 'high' } },
+              { type: 'text', text: userText },
+            ],
+          },
+        ]
+        const stream = await this.openai.chat.completions.create({
+          model: this.activeModel,
+          max_tokens: 4096,
+          stream: true,
+          messages: [{ role: 'system', content: systemPrompt }, ...openaiMessages],
+        }, { signal: this.abortController.signal })
+
+        for await (const chunk of stream) {
+          const token = chunk.choices[0]?.delta?.content ?? ''
+          if (token) { fullResponse += token; this.ipcBus.emit('llm:token', token) }
+        }
+      } else {
+        const stream = this.anthropic.messages.stream({
+          model: this.activeModel,
+          max_tokens: 4096,
+          system: systemPrompt,
+          messages,
+        })
+        this.currentStream = stream
+
+        for await (const event of stream) {
+          if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+            const token = event.delta.text
+            fullResponse += token
+            this.ipcBus.emit('llm:token', token)
+          }
         }
       }
 
@@ -625,7 +699,7 @@ export class LLMWorker {
         await this.cache.set('Screen_' + Date.now(), questionType, fullResponse)
       }
     } catch (err: any) {
-      const isAbort = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort')
+      const isAbort = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort') || err?.code === 'ERR_CANCELED'
       if (!isAbort) {
         console.error('[LLMWorker] Screen analysis error:', err?.message)
         this.ipcBus.emit('llm:token', '\n\n⚠️ Screen analysis failed. Please try again.')
@@ -633,6 +707,7 @@ export class LLMWorker {
       }
     } finally {
       this.currentStream = null
+      this.abortController = null
       this.isGenerating = false
     }
   }
@@ -650,37 +725,54 @@ export class LLMWorker {
         ? `${images.length} new screenshot(s) captured. Based on our session so far, continue helping me. Solve all questions visible across these screens.`
         : `Solve all questions shown across these ${images.length} screenshots.`
 
-      const imageBlocks = images.map(data => ({
-        type: 'image' as const,
-        source: { type: 'base64' as const, media_type: 'image/png' as const, data },
-      }))
+      console.log(`[LLMWorker] Analysing ${images.length} screenshots (model: ${this.activeModel}, history: ${this.conversationHistory.length} msgs)`)
+      const systemPrompt = getScreenAnalysisPrompt(this.sessionTestType)
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const messages: any[] = [
-        ...this.conversationHistory,
-        {
-          role: 'user',
-          content: [
-            ...imageBlocks,
-            { type: 'text', text: userText },
-          ],
-        },
-      ]
-
-      console.log(`[LLMWorker] Analysing ${images.length} screenshots (history: ${this.conversationHistory.length} msgs)`)
-      const stream = this.client.messages.stream({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
-        system: getScreenAnalysisPrompt(this.sessionTestType),
-        messages,
-      })
-      this.currentStream = stream
-      for await (const event of stream) {
-        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-          fullResponse += event.delta.text
-          this.ipcBus.emit('llm:token', event.delta.text)
+      if (isOpenAIModel(this.activeModel)) {
+        this.abortController = new AbortController()
+        const openaiImageBlocks = images.map(data => ({
+          type: 'image_url' as const,
+          image_url: { url: `data:image/png;base64,${data}`, detail: 'high' as const },
+        }))
+        const openaiMessages: any[] = [
+          ...this.conversationHistory.map(m => ({ role: m.role, content: m.content })),
+          { role: 'user' as const, content: [...openaiImageBlocks, { type: 'text', text: userText }] },
+        ]
+        const stream = await this.openai.chat.completions.create({
+          model: this.activeModel,
+          max_tokens: 4096,
+          stream: true,
+          messages: [{ role: 'system', content: systemPrompt }, ...openaiMessages],
+        }, { signal: this.abortController.signal })
+        for await (const chunk of stream) {
+          const token = chunk.choices[0]?.delta?.content ?? ''
+          if (token) { fullResponse += token; this.ipcBus.emit('llm:token', token) }
+        }
+      } else {
+        const imageBlocks = images.map(data => ({
+          type: 'image' as const,
+          source: { type: 'base64' as const, media_type: 'image/png' as const, data },
+        }))
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const messages: any[] = [
+          ...this.conversationHistory,
+          { role: 'user', content: [...imageBlocks, { type: 'text', text: userText }] },
+        ]
+        const stream = this.anthropic.messages.stream({
+          model: this.activeModel,
+          max_tokens: 4096,
+          system: systemPrompt,
+          messages,
+        })
+        this.currentStream = stream
+        for await (const event of stream) {
+          if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+            fullResponse += event.delta.text
+            this.ipcBus.emit('llm:token', event.delta.text)
+          }
         }
       }
+
       this.ipcBus.emit('llm:done')
       if (fullResponse) {
         this.conversationHistory.push({ role: 'user', content: `[${images.length} screenshot(s) at ${timestamp}] ${userText}` })
@@ -691,7 +783,7 @@ export class LLMWorker {
         await this.cache.set('ScreenMulti_' + Date.now(), 'general', fullResponse)
       }
     } catch (err: any) {
-      const isAbort = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort')
+      const isAbort = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort') || err?.code === 'ERR_CANCELED'
       if (!isAbort) {
         console.error('[LLMWorker] Multi-screen analysis error:', err?.message)
         this.ipcBus.emit('llm:token', `\n\n⚠️ Failed to analyse ${images.length} screenshot(s). Try fewer screenshots or use single capture.`)
@@ -699,6 +791,7 @@ export class LLMWorker {
       }
     } finally {
       this.currentStream = null
+      this.abortController = null
       this.isGenerating = false
     }
   }
@@ -724,20 +817,41 @@ export class LLMWorker {
         { role: 'user', content: prompt },
       ]
 
-      console.log(`[LLMWorker] Manual prompt (history: ${this.conversationHistory.length} msgs):`, prompt.slice(0, 80))
-      const stream = this.client.messages.stream({
-        model: MODEL,
-        max_tokens: 2048,
-        system: systemPrompt,
-        messages,
-      })
-      this.currentStream = stream
-      for await (const event of stream) {
-        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-          fullResponse += event.delta.text
-          this.ipcBus.emit('llm:token', event.delta.text)
+      console.log(`[LLMWorker] Manual prompt (model: ${this.activeModel}, history: ${this.conversationHistory.length} msgs):`, prompt.slice(0, 80))
+
+      if (isOpenAIModel(this.activeModel)) {
+        this.abortController = new AbortController()
+        const openaiMessages: any[] = [
+          { role: 'system' as const, content: systemPrompt },
+          ...this.conversationHistory.map(m => ({ role: m.role, content: m.content })),
+          { role: 'user' as const, content: prompt },
+        ]
+        const stream = await this.openai.chat.completions.create({
+          model: this.activeModel,
+          max_tokens: 2048,
+          stream: true,
+          messages: openaiMessages,
+        }, { signal: this.abortController.signal })
+        for await (const chunk of stream) {
+          const token = chunk.choices[0]?.delta?.content ?? ''
+          if (token) { fullResponse += token; this.ipcBus.emit('llm:token', token) }
+        }
+      } else {
+        const stream = this.anthropic.messages.stream({
+          model: this.activeModel,
+          max_tokens: 2048,
+          system: systemPrompt,
+          messages,
+        })
+        this.currentStream = stream
+        for await (const event of stream) {
+          if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+            fullResponse += event.delta.text
+            this.ipcBus.emit('llm:token', event.delta.text)
+          }
         }
       }
+
       this.ipcBus.emit('llm:done')
       if (fullResponse) {
         this.conversationHistory.push({ role: 'user', content: prompt })
@@ -748,7 +862,7 @@ export class LLMWorker {
         await this.cache.set('Manual_' + Date.now(), 'manual', fullResponse)
       }
     } catch (err: any) {
-      const isAbort = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort')
+      const isAbort = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort') || err?.code === 'ERR_CANCELED'
       if (!isAbort) {
         console.error('[LLMWorker] Manual prompt error:', err?.message)
         this.ipcBus.emit('llm:token', '\n\n⚠️ Failed to get a response. Please try again.')
@@ -756,6 +870,7 @@ export class LLMWorker {
       }
     } finally {
       this.currentStream = null
+      this.abortController = null
       this.isGenerating = false
     }
   }

@@ -179,9 +179,10 @@ export default function Settings({ user, onLogout, onUserUpdate }: Props) {
               <label className="settings-label">Model</label>
               <div className="settings-radio-group">
                 {[
-                  { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6', desc: 'Best balance of speed & quality' },
-                  { value: 'claude-opus-4-6', label: 'Opus 4.6', desc: 'Most powerful, slower' },
-                  { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5', desc: 'Fastest responses' },
+                  { value: 'claude-sonnet-4-6',        label: 'Claude Sonnet 4.6', desc: 'Best balance of speed & quality' },
+                  { value: 'claude-opus-4-6',           label: 'Claude Opus 4.6',   desc: 'Most powerful, slower' },
+                  { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5',  desc: 'Fastest Claude responses' },
+                  { value: 'gpt-4.1-mini',              label: 'GPT-4.1 mini',      desc: 'OpenAI — fast & cost-efficient' },
                 ].map(opt => (
                   <label key={opt.value} className={`settings-radio-card${settings.aiModel === opt.value ? ' selected' : ''}`}>
                     <input type="radio" name="aiModel" value={opt.value} checked={settings.aiModel === opt.value} onChange={() => update('aiModel', opt.value)} />

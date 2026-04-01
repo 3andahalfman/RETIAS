@@ -4730,44 +4730,6 @@
                           ]
                         }
                       ]
-                    },
-                    {
-                      "type": "frame",
-                      "id": "yAqyD",
-                      "name": "micBtnUpdate",
-                      "fill": "#15CDCA1A",
-                      "cornerRadius": 8,
-                      "stroke": {
-                        "align": "inside",
-                        "thickness": 1,
-                        "fill": "#15CDCA4D"
-                      },
-                      "gap": 6,
-                      "padding": [
-                        5,
-                        12
-                      ],
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "icon_font",
-                          "id": "Ev4r7",
-                          "width": 13,
-                          "height": 13,
-                          "iconFontName": "mic",
-                          "iconFontFamily": "lucide",
-                          "fill": "#15CDCA"
-                        },
-                        {
-                          "type": "text",
-                          "id": "bDOSM",
-                          "fill": "#15CDCA",
-                          "content": "Mic",
-                          "fontFamily": "Inter",
-                          "fontSize": 11,
-                          "fontWeight": "600"
-                        }
-                      ]
                     }
                   ]
                 },
