@@ -96,11 +96,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   authGoogle: () => ipcRenderer.invoke('auth:google'),
   authRestore: (userId: string) => ipcRenderer.invoke('auth:restore', userId),
   authLogout: () => ipcRenderer.send('auth:logout'),
+  authRefresh: () => ipcRenderer.invoke('auth:refresh'),
 
   // CVs
   saveCv: (name: string, content: string) => ipcRenderer.invoke('cv:save', name, content),
   listCvs: () => ipcRenderer.invoke('cv:list'),
   deleteCv: (cvId: string) => ipcRenderer.invoke('cv:delete', cvId),
+
+  // Admin screenshot library
+  adminListScreenshots: (offset = 0, limit = 50) =>
+    ipcRenderer.invoke('admin:list-screenshots', offset, limit),
+  adminGetScreenshotUrl: (path: string) => ipcRenderer.invoke('admin:get-screenshot-url', path),
 
   // Auto-updater
   onUpdateAvailable: (cb: (version: string) => void) => ipcRenderer.on('update:available', (_e, version) => cb(version)),

@@ -23,3 +23,10 @@ CREATE INDEX IF NOT EXISTS idx_session_transcript_session_id
 -- cvs: list CVs for a user
 CREATE INDEX IF NOT EXISTS idx_cvs_user_id
   ON cvs (user_id);
+
+-- online_test_captures: admin library feed
+CREATE INDEX IF NOT EXISTS idx_online_test_captures_created
+  ON online_test_captures (created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_online_test_captures_user
+  ON online_test_captures (user_id);

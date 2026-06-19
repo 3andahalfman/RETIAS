@@ -34,6 +34,7 @@ const isDev = process.env.NODE_ENV === 'development'
 let overlayWindow: BrowserWindow | null = null
 let ipcBus: IpcBus
 let currentUserId: string | null = null
+let currentUserEmail: string | null = null
 let currentUserIsPremium = false
 
 // ── Auth rate limiting ──────────────────────────────────────────────────────
@@ -283,6 +284,7 @@ async function bootstrap() {
       targetRole:      clamp(config.targetRole        ?? '', LIMITS.targetRole,'targetRole'),
       extraContext:    clamp(config.extraContext       ?? '', LIMITS.extraCtx,  'extraContext'),
       userId: currentUserId ?? undefined,
+      userEmail: currentUserEmail ?? undefined,
     }
     // Refresh screen source cache at session start in case displays changed since startup
     desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
@@ -341,6 +343,7 @@ async function bootstrap() {
       const user = await createUser(safeEmail, safePassword, safeName)
       clearAuthFailures(safeEmail)
       currentUserId = user.id
+      currentUserEmail = user.email
       currentUserIsPremium = user.is_premium
       return user
     } catch (err) {
@@ -358,6 +361,7 @@ async function bootstrap() {
       const user = await loginUser(safeEmail, safePassword)
       clearAuthFailures(safeEmail)
       currentUserId = user.id
+      currentUserEmail = user.email
       currentUserIsPremium = user.is_premium
       return user
     } catch (err) {
@@ -379,6 +383,7 @@ async function bootstrap() {
     const info = await startGoogleOAuth()
     const user = await findOrCreateGoogleUser(info.googleId, info.email, info.name)
     currentUserId = user.id
+    currentUserEmail = user.email
     currentUserIsPremium = user.is_premium
     return user
   })
@@ -388,6 +393,7 @@ async function bootstrap() {
     const user = await getUserById(userId)
     if (user) {
       currentUserId = user.id
+      currentUserEmail = user.email
       currentUserIsPremium = user.is_premium
     }
     return user
@@ -395,9 +401,49 @@ async function bootstrap() {
 
   ipcMain.on('auth:logout', async () => {
     currentUserId = null
+    currentUserEmail = null
     currentUserIsPremium = false
     const { authLogout } = await import('./lib/auth-store.js')
     await authLogout().catch(() => {})
+  })
+
+  // Refresh the Supabase session so the JWT picks up updated app_metadata
+  // (e.g. after a Paystack payment activates is_premium).
+  ipcMain.handle('auth:refresh', async () => {
+    const { supabase } = await import('./lib/supabase.js')
+    const { data, error } = await supabase.auth.refreshSession()
+    if (error || !data.user) return null
+    const { getUserById } = await import('./lib/auth-store.js')
+    const user = await getUserById(data.user.id)
+    if (user) {
+      currentUserId = user.id
+      currentUserEmail = user.email
+      currentUserIsPremium = user.is_premium
+    }
+    return user
+  })
+
+  // ── Admin: online test screenshot library ─────────────────────────────────
+
+  ipcMain.handle('admin:list-screenshots', async (_e, offset = 0, limit = 50) => {
+    const { isAdminEmail } = await import('./lib/admin.js')
+    if (!isAdminEmail(currentUserEmail)) throw new Error('Unauthorized')
+    const { listOnlineTestCaptures, getOnlineTestCaptureStats } = await import('./lib/screenshot-store.js')
+    const [captures, stats] = await Promise.all([
+      listOnlineTestCaptures(limit, offset),
+      getOnlineTestCaptureStats(),
+    ])
+    return { captures, stats }
+  })
+
+  ipcMain.handle('admin:get-screenshot-url', async (_e, path: string) => {
+    const { isAdminEmail } = await import('./lib/admin.js')
+    if (!isAdminEmail(currentUserEmail)) throw new Error('Unauthorized')
+    if (typeof path !== 'string' || path.includes('..') || !/^[\w-]+\/[\w-]+\/\d+\.png$/.test(path)) {
+      throw new Error('Invalid path')
+    }
+    const { getScreenshotSignedUrl } = await import('./lib/screenshot-store.js')
+    return getScreenshotSignedUrl(path)
   })
 
   // ── CV handlers ────────────────────────────────────────────────────────────

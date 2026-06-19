@@ -38,7 +38,10 @@ export class SessionRecorder {
       this.sessionId = id
       this.currentQuestion = ''
       this.currentAnswer = ''
-      createSession(id, config.company || '', config.targetRole || '', config.userId).catch(console.error)
+      const company = config.testType ? 'Online Test' : (config.company || '')
+      const targetRole = config.testType ? config.testType : (config.targetRole || '')
+      createSession(id, company, targetRole, config.userId).catch(console.error)
+      this.ipcBus.emit('session:id', id)
       console.log(`[SessionRecorder] Session started: ${id}`)
     }
 

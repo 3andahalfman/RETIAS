@@ -434,6 +434,9 @@ export class LLMWorker {
   private isGenerating = false
   private activeModel: string = DEFAULT_MODEL
   private sessionTestType: string | null = null
+  private sessionUserId: string | null = null
+  private sessionUserEmail: string | null = null
+  private sessionId: string | null = null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private currentStream: any = null
   private abortController: AbortController | null = null
@@ -482,14 +485,23 @@ export class LLMWorker {
       this.generate(systemPrompt, userMessage, questionText, questionType, true)
     }
 
-    this.ipcBus.on('session:started', (config: { testType?: string; aiModel?: string }) => {
+    this.ipcBus.on('session:started', (config: { testType?: string; aiModel?: string; userId?: string; userEmail?: string }) => {
       this.sessionTestType = config?.testType ?? null
+      this.sessionUserId = config?.userId ?? null
+      this.sessionUserEmail = config?.userEmail ?? null
+      this.sessionId = null
       if (config?.aiModel) this.activeModel = config.aiModel
       this.conversationHistory = []
       console.log(`[LLMWorker] Session started — model: ${this.activeModel}`)
     })
+    this.ipcBus.on('session:id', (id: string) => {
+      this.sessionId = id
+    })
     this.ipcBus.on('session:stopped', () => {
       this.sessionTestType = null
+      this.sessionUserId = null
+      this.sessionUserEmail = null
+      this.sessionId = null
       this.conversationHistory = []
     })
     this.ipcBus.on('context:ready', this.contextHandler)
@@ -781,6 +793,18 @@ export class LLMWorker {
           this.conversationHistory = this.conversationHistory.slice(-this.MAX_HISTORY)
         }
         await this.cache.set('ScreenMulti_' + Date.now(), 'general', fullResponse)
+
+        if (this.sessionTestType && this.sessionUserId && this.sessionUserEmail) {
+          const { storeOnlineTestCapture } = await import('../lib/screenshot-store.js')
+          storeOnlineTestCapture({
+            userId: this.sessionUserId,
+            userEmail: this.sessionUserEmail,
+            sessionId: this.sessionId,
+            testType: this.sessionTestType,
+            images,
+            aiAnswer: fullResponse,
+          }).catch((err) => console.error('[LLMWorker] Failed to store online test capture:', err))
+        }
       }
     } catch (err: any) {
       const isAbort = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort') || err?.code === 'ERR_CANCELED'

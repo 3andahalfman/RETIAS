@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import PaystackButton from './PaystackButton'
 
 interface Props {
   user: User
@@ -453,7 +454,13 @@ export default function Settings({ user, onLogout, onUserUpdate }: Props) {
               ) : (
                 <div className="settings-free-plan">
                   <div className="settings-plan-badge free">Free Plan</div>
-                  <button type="button" className="settings-btn-primary">Upgrade to Premium</button>
+                  <PaystackButton
+                    user={{ id: user.id, email: user.email }}
+                    onSuccess={() => onUserUpdate({ is_premium: true })}
+                    className="settings-btn-primary"
+                  >
+                    Upgrade to Premium
+                  </PaystackButton>
                 </div>
               )}
             </div>

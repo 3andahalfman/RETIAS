@@ -80,6 +80,28 @@ interface CV {
   created_at: number
 }
 
+interface AdminOnlineTestCapture {
+  id: string
+  user_id: string
+  user_email: string
+  session_id: string | null
+  test_type: string
+  screenshot_paths: string[]
+  screenshot_count: number
+  ai_answer: string
+  score_accuracy: number | null
+  score_completeness: number | null
+  score_overall: number | null
+  score_notes: string | null
+  created_at: string
+}
+
+interface AdminCaptureStats {
+  totalCaptures: number
+  avgOverallScore: number | null
+  uniqueUsers: number
+}
+
 interface ElectronAPI {
   startSession: (config: SessionConfig) => void
   stopSession: () => void
@@ -145,11 +167,42 @@ interface ElectronAPI {
   authGoogle: () => Promise<User>
   authRestore: (userId: string) => Promise<User | null>
   authLogout: () => void
+  authRefresh?: () => Promise<User | null>
+  authCheckUsername?: (displayName: string) => Promise<boolean>
+  updateDisplayName?: (displayName: string) => Promise<void>
+
+  // Admin: online test screenshot library (Electron-only)
+  adminListScreenshots?: (offset?: number, limit?: number) => Promise<{
+    captures: Array<{
+      id: string
+      user_id: string
+      user_email: string
+      session_id: string | null
+      test_type: string
+      screenshot_paths: string[]
+      screenshot_count: number
+      ai_answer: string
+      score_accuracy: number | null
+      score_completeness: number | null
+      score_overall: number | null
+      score_notes: string | null
+      created_at: string
+    }>
+    stats: { totalCaptures: number; avgOverallScore: number | null; uniqueUsers: number }
+  }>
+  adminGetScreenshotUrl?: (path: string) => Promise<string | null>
 
   // CVs
   saveCv: (name: string, content: string) => Promise<CV>
   listCvs: () => Promise<CV[]>
   deleteCv: (cvId: string) => Promise<void>
+
+  // Admin — online test screenshot library (admin@retias.com only)
+  adminListScreenshots: (offset?: number, limit?: number) => Promise<{
+    captures: AdminOnlineTestCapture[]
+    stats: AdminCaptureStats
+  }>
+  adminGetScreenshotUrl: (path: string) => Promise<string | null>
 }
 
 declare global {

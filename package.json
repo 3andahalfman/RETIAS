@@ -54,7 +54,12 @@
           ]
         }
       ],
-      "icon": "public/logo.png"
+      "icon": "public/logo.png",
+      "publisherName": "RETIAS",
+      "rfc3161TimeStampServer": "http://timestamp.digicert.com",
+      "signingHashAlgorithms": [
+        "sha256"
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -62,7 +67,8 @@
       "perMachine": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "artifactName": "RETIAS-Setup.exe"
+      "artifactName": "RETIAS-Setup.exe",
+      "uninstallDisplayName": "RETIAS"
     },
     "directories": {
       "output": "release"

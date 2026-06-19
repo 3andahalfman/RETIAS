@@ -1,19 +1,27 @@
+import PaystackButton from './PaystackButton'
+import { isAdminEmail } from '../lib/admin'
+
 interface SidebarProps {
-  activeItem: 'dashboard' | 'sessions' | 'cv-manager' | 'settings'
+  activeItem: 'dashboard' | 'sessions' | 'cv-manager' | 'settings' | 'admin-screenshots'
   user: User
-  onNavigate: (item: 'dashboard' | 'sessions' | 'cv-manager' | 'settings') => void
+  onNavigate: (item: 'dashboard' | 'sessions' | 'cv-manager' | 'settings' | 'admin-screenshots') => void
   onLogout?: () => void
+  onUpgrade?: () => void
 }
 
-const navItems: { id: 'dashboard' | 'sessions' | 'cv-manager' | 'settings'; label: string; icon: string }[] = [
+const navItems: { id: 'dashboard' | 'sessions' | 'cv-manager' | 'settings' | 'admin-screenshots'; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: '⊞' },
   { id: 'sessions',  label: 'Sessions',  icon: '⏱' },
   { id: 'cv-manager',label: 'CV Manager',icon: '📄' },
   { id: 'settings',  label: 'Settings',  icon: '⚙' },
 ]
 
-export default function Sidebar({ activeItem, user, onNavigate, onLogout }: SidebarProps) {
+export default function Sidebar({ activeItem, user, onNavigate, onLogout, onUpgrade }: SidebarProps) {
   const initials = (user.display_name || user.email || '?').slice(0, 2).toUpperCase()
+  const showAdmin = isAdminEmail(user.email)
+  const items = showAdmin
+    ? [...navItems, { id: 'admin-screenshots' as const, label: 'Screenshot Library', icon: '📸' }]
+    : navItems
 
   return (
     <div className="page-sidebar">
@@ -24,7 +32,7 @@ export default function Sidebar({ activeItem, user, onNavigate, onLogout }: Side
 
       <div className="sidebar-section-label">MAIN</div>
 
-      {navItems.map((item) => (
+      {items.map((item) => (
         <button
           key={item.id}
           type="button"
@@ -47,9 +55,13 @@ export default function Sidebar({ activeItem, user, onNavigate, onLogout }: Side
           <div className="sidebar-upgrade-desc">
             Upgrade for unlimited sessions.
           </div>
-          <button type="button" className="sidebar-upgrade-btn">
+          <PaystackButton
+            user={{ id: user.id, email: user.email }}
+            onSuccess={() => onUpgrade?.()}
+            className="sidebar-upgrade-btn"
+          >
             Upgrade to Premium
-          </button>
+          </PaystackButton>
         </div>
       )}
 

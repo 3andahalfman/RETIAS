@@ -175,5 +175,6 @@ export interface SessionConfig {
   autoGenerate?: boolean
   jobUrl?: string
   userId?: string
+  userEmail?: string
   testType?: string  // 'english' | 'coding' | 'ai-ml' | 'numerical' | 'technical' | 'onboarding'
 }

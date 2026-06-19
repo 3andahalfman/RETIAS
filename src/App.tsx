@@ -16,9 +16,10 @@ import AudioCapture from './components/AudioCapture'
 import ManualPromptBar from './components/ManualPromptBar'
 import CvManager from './components/CvManager'
 import Settings from './components/Settings'
+import AdminScreenshotDashboard from './components/AdminScreenshotDashboard'
 import './index.css'
 
-type View = 'dashboard' | 'setup' | 'mock-interview' | 'past-sessions' | 'session' | 'online-test' | 'cv-manager' | 'settings'
+type View = 'dashboard' | 'setup' | 'mock-interview' | 'past-sessions' | 'session' | 'online-test' | 'cv-manager' | 'settings' | 'admin-screenshots'
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -105,6 +106,10 @@ export default function App() {
     setUser(u)
     setView('dashboard')
     setShowTutorial(!localStorage.getItem('retias_tutorial_seen'))
+  }
+
+  const handleUpgrade = () => {
+    setUser(prev => (prev ? { ...prev, is_premium: true } : prev))
   }
 
   const handleLogout = () => {
@@ -198,7 +203,7 @@ export default function App() {
   }
 
   // Docked non-session views
-  if (isDocked && (view === 'setup' || view === 'dashboard' || view === 'mock-interview' || view === 'online-test' || view === 'past-sessions' || view === 'cv-manager' || view === 'settings')) {
+  if (isDocked && (view === 'setup' || view === 'dashboard' || view === 'mock-interview' || view === 'online-test' || view === 'past-sessions' || view === 'cv-manager' || view === 'settings' || view === 'admin-screenshots')) {
     return (
       <div className="app-root docked">
         <div
@@ -214,11 +219,12 @@ export default function App() {
     )
   }
 
-  const handleSidebarNavigate = (item: 'dashboard' | 'sessions' | 'cv-manager' | 'settings') => {
+  const handleSidebarNavigate = (item: 'dashboard' | 'sessions' | 'cv-manager' | 'settings' | 'admin-screenshots') => {
     if (item === 'sessions') setView('past-sessions')
     else if (item === 'dashboard') setView('dashboard')
     else if (item === 'cv-manager') setView('cv-manager')
     else if (item === 'settings') setView('settings')
+    else if (item === 'admin-screenshots') setView('admin-screenshots')
   }
 
   if (view === 'dashboard') {
@@ -226,7 +232,7 @@ export default function App() {
       <div className="app-root">
         <UpdateBanner />
         <div className="page-layout">
-          <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} />
+          <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={handleUpgrade} />
           <div className="page-main">
             <Dashboard
               onNewSession={() => setView('setup')}
@@ -249,7 +255,7 @@ export default function App() {
     return (
       <div className="app-root">
         <div className="page-layout">
-          <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} />
+          <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={handleUpgrade} />
           <div className="page-main">
             <MockInterviewSetup
               onCreateSession={handleCreateSession}
@@ -267,7 +273,7 @@ export default function App() {
     return (
       <div className="app-root">
         <div className="page-layout">
-          <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} />
+          <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={handleUpgrade} />
           <div className="page-main">
             <SetupWizard
               onCreateSession={handleCreateSession}
@@ -297,7 +303,7 @@ export default function App() {
     return (
       <div className="app-root">
         <div className="page-layout">
-          <Sidebar activeItem="cv-manager" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} />
+          <Sidebar activeItem="cv-manager" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={handleUpgrade} />
           <div className="page-main">
             <CvManager
               cvs={cvs}
@@ -314,7 +320,7 @@ export default function App() {
     return (
       <div className="app-root">
         <div className="page-layout">
-          <Sidebar activeItem="sessions" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} />
+          <Sidebar activeItem="sessions" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={handleUpgrade} />
           <div className="page-main">
             <PastSessions
               onNewSession={() => setView('setup')}
@@ -330,13 +336,26 @@ export default function App() {
     return (
       <div className="app-root">
         <div className="page-layout">
-          <Sidebar activeItem="settings" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} />
+          <Sidebar activeItem="settings" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={handleUpgrade} />
           <div className="page-main">
             <Settings
               user={user}
               onLogout={handleLogout}
               onUserUpdate={(updates) => setUser(prev => prev ? { ...prev, ...updates } : prev)}
             />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (view === 'admin-screenshots') {
+    return (
+      <div className="app-root">
+        <div className="page-layout">
+          <Sidebar activeItem="admin-screenshots" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={handleUpgrade} />
+          <div className="page-main">
+            <AdminScreenshotDashboard onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }} />
           </div>
         </div>
       </div>
