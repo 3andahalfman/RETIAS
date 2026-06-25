@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS solved_questions (
 ALTER TABLE solved_questions ENABLE ROW LEVEL SECURITY;
 
 -- Premium+ users (and admin) can browse the bank
+DROP POLICY IF EXISTS "Premium plus reads solved questions" ON solved_questions;
 CREATE POLICY "Premium plus reads solved questions"
   ON solved_questions FOR SELECT
   USING (
@@ -30,14 +31,17 @@ CREATE POLICY "Premium plus reads solved questions"
   );
 
 -- Only admin writes
+DROP POLICY IF EXISTS "Admin inserts solved questions" ON solved_questions;
 CREATE POLICY "Admin inserts solved questions"
   ON solved_questions FOR INSERT
   WITH CHECK ((auth.jwt() ->> 'email') = 'admin@retias.com');
 
+DROP POLICY IF EXISTS "Admin updates solved questions" ON solved_questions;
 CREATE POLICY "Admin updates solved questions"
   ON solved_questions FOR UPDATE
   USING ((auth.jwt() ->> 'email') = 'admin@retias.com');
 
+DROP POLICY IF EXISTS "Admin deletes solved questions" ON solved_questions;
 CREATE POLICY "Admin deletes solved questions"
   ON solved_questions FOR DELETE
   USING ((auth.jwt() ->> 'email') = 'admin@retias.com');

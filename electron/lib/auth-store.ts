@@ -12,16 +12,17 @@ export interface User {
   is_premium_plus: boolean
 }
 
-function mapUser(u: SupabaseUser): User {
+function mapUser(u: SupabaseUser, profileDisplayName?: string | null): User {
   const googleIdentity = u.identities?.find((i) => i.provider === 'google')
+  const metaName =
+    u.user_metadata?.display_name ||
+    u.user_metadata?.full_name ||
+    ''
+  const emailLocal = u.email?.split('@')[0] ?? ''
   return {
     id: u.id,
     email: u.email ?? '',
-    display_name:
-      u.user_metadata?.display_name ||
-      u.user_metadata?.full_name ||
-      u.email ||
-      '',
+    display_name: profileDisplayName?.trim() || metaName.trim() || emailLocal,
     google_id: googleIdentity
       ? (googleIdentity.identity_data?.sub ?? null)
       : null,
@@ -29,6 +30,20 @@ function mapUser(u: SupabaseUser): User {
     is_premium: u.app_metadata?.is_premium === true || u.app_metadata?.is_premium_plus === true,
     is_premium_plus: u.app_metadata?.is_premium_plus === true,
   }
+}
+
+async function fetchProfileDisplayName(userId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('profiles')
+    .select('display_name')
+    .eq('id', userId)
+    .maybeSingle()
+  return data?.display_name ?? null
+}
+
+async function enrichUser(u: SupabaseUser): Promise<User> {
+  const profileName = await fetchProfileDisplayName(u.id)
+  return mapUser(u, profileName)
 }
 
 export async function checkUsernameAvailable(displayName: string): Promise<boolean> {
@@ -74,7 +89,7 @@ export async function createUser(
     console.error('[auth-store] profile insert error:', profileError.message)
   }
 
-  const user = mapUser(data.user)
+  const user = await enrichUser(data.user)
   const { data: sessionData } = await supabase.auth.getSession()
   if (sessionData.session) await assertDesktopDeviceAllowed()
   return user
@@ -87,7 +102,7 @@ export async function loginUser(email: string, password: string): Promise<User> 
   })
   if (error) throw new Error(error.message)
   if (!data.user) throw new Error('Login failed')
-  const user = mapUser(data.user)
+  const user = await enrichUser(data.user)
   await assertDesktopDeviceAllowed()
   return user
 }
@@ -107,25 +122,34 @@ export async function findOrCreateGoogleUser(
       password: derivedPassword,
     })
   if (!signInError && signInData.user) {
-    const user = mapUser(signInData.user)
+    const user = await enrichUser(signInData.user)
     await assertDesktopDeviceAllowed()
     return user
   }
 
   // Create new account
+  const trimmedName = displayName.trim() || normalizedEmail
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
     email: normalizedEmail,
     password: derivedPassword,
     options: {
       data: {
-        display_name: displayName.trim() || normalizedEmail,
+        display_name: trimmedName,
         google_id: googleId,
       },
     },
   })
   if (signUpError) throw new Error(signUpError.message)
   if (!signUpData.user) throw new Error('Google sign-in failed')
-  const user = mapUser(signUpData.user)
+
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .insert({ id: signUpData.user.id, display_name: trimmedName })
+  if (profileError && profileError.code !== '23505') {
+    console.error('[auth-store] profile insert error:', profileError.message)
+  }
+
+  const user = await enrichUser(signUpData.user)
   const { data: sessionData } = await supabase.auth.getSession()
   if (sessionData.session) await assertDesktopDeviceAllowed()
   return user
@@ -147,12 +171,21 @@ export async function getUserById(userId: string): Promise<User | null> {
     return null
   }
 
-  return mapUser(userData.user)
+  return enrichUser(userData.user)
 }
 
 export async function updateDisplayName(userId: string, displayName: string): Promise<void> {
-  const { error } = await supabase.from('users').update({ display_name: displayName }).eq('id', userId)
-  if (error) console.error('[auth-store] updateDisplayName error:', error.message)
+  const trimmed = displayName.trim()
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .update({ display_name: trimmed })
+    .eq('id', userId)
+  if (profileError) console.error('[auth-store] updateDisplayName profiles error:', profileError.message)
+
+  const { error: metaError } = await supabase.auth.updateUser({
+    data: { display_name: trimmed },
+  })
+  if (metaError) console.error('[auth-store] updateDisplayName metadata error:', metaError.message)
 }
 
 export async function authLogout(): Promise<void> {

@@ -162,7 +162,11 @@ export default function Dashboard({ onNewSession, onPastSessions, onMockIntervie
     return '#4F80E2'
   }
 
-  const firstName = user.display_name?.split(' ')[0] || user.email?.split('@')[0] || 'there'
+  const greetingName =
+    user.display_name?.trim() ||
+    user.email?.split('@')[0]?.trim() ||
+    'there'
+  const firstName = greetingName.split(/\s+/)[0]
   const hasRecent = metrics && metrics.recentSessions.length > 0
   const showAdminSolved = isAdminEmail(user.email)
 
