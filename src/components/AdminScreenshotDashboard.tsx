@@ -258,7 +258,7 @@ export default function AdminScreenshotDashboard({ onDock }: Props) {
       setUsers(result.users)
       setRecentCaptures(recent)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load screenshot library')
+      setError(err instanceof Error ? err.message : 'Failed to load assessment archive')
     } finally {
       setLoading(false)
     }
@@ -549,8 +549,8 @@ export default function AdminScreenshotDashboard({ onDock }: Props) {
       )}
 
       <OnlineTestPageHeader
-        title="Screenshot Library"
-        subtitle="Scored online test captures from all users — admin only."
+        title="Assessment Archive"
+        subtitle="Browse scored online test captures from all users — admin only."
         accent={ONLINE_TEST_ACCENTS.amber}
         icon={IconScreenshot}
       />

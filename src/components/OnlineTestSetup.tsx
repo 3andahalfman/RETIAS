@@ -3,6 +3,7 @@ import WindowControls from './WindowControls'
 import {
   IconAiMl,
   IconCoding,
+  IconGeneral,
   IconNumerical,
   IconOnboarding,
   IconTechnical,
@@ -67,6 +68,13 @@ const TEST_TYPES: {
     desc: 'Company policy, H&S & e-learning modules',
     accent: ONLINE_TEST_ACCENTS.teal,
     Icon: IconOnboarding,
+  },
+  {
+    id: 'general',
+    label: 'General',
+    desc: 'Not sure which type? Works for any mixed or uncategorised test',
+    accent: ONLINE_TEST_ACCENTS.emerald,
+    Icon: IconGeneral,
   },
 ]
 

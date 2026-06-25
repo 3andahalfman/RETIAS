@@ -176,5 +176,5 @@ export interface SessionConfig {
   jobUrl?: string
   userId?: string
   userEmail?: string
-  testType?: string  // 'english' | 'coding' | 'ai-ml' | 'numerical' | 'technical' | 'onboarding'
+  testType?: string  // 'english' | 'coding' | 'ai-ml' | 'numerical' | 'technical' | 'onboarding' | 'general'
 }

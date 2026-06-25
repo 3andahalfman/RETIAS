@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import WindowControls from './WindowControls'
-import AdminSolvedManager from './AdminSolvedManager'
-import { isAdminEmail } from '../lib/admin'
 
 interface DashboardMetrics {
   totalSessions: number
@@ -20,69 +18,14 @@ interface DashboardMetrics {
 }
 
 interface Props {
-  onNewSession: () => void
   onPastSessions: () => void
-  onMockInterview: () => void
-  onOnlineTest: () => void
   onDock: () => void
   user: User
   onLogout: () => void
   onCvsChange?: () => void
 }
 
-const SESSION_TYPES = [
-  {
-    id: 'real',
-    title: 'Real Interview',
-    desc: 'Live coaching for a real job application',
-    color: '#4F80E2',
-    bg: 'rgba(79,128,226,0.12)',
-    border: 'rgba(79,128,226,0.22)',
-    btnClass: 'dash-action-btn-blue',
-    label: 'New Session',
-    onClick: (p: Props) => p.onNewSession,
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-      </svg>
-    ),
-  },
-  {
-    id: 'mock',
-    title: 'Mock Interview',
-    desc: 'Practice with a YouTube mock interviewer',
-    color: '#15CDCA',
-    bg: 'rgba(21,205,202,0.12)',
-    border: 'rgba(21,205,202,0.22)',
-    btnClass: 'dash-action-btn-teal',
-    label: 'Start Mock',
-    onClick: (p: Props) => p.onMockInterview,
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-      </svg>
-    ),
-  },
-  {
-    id: 'test',
-    title: 'Online Assessment',
-    desc: 'Coding challenges with real-time AI help',
-    color: '#F59E0B',
-    bg: 'rgba(245,158,11,0.12)',
-    border: 'rgba(245,158,11,0.22)',
-    btnClass: 'dash-action-btn-amber',
-    label: 'Start Test',
-    premium: true,
-    onClick: (p: Props) => p.onOnlineTest,
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
-      </svg>
-    ),
-  },
-] as const
-
-export default function Dashboard({ onNewSession, onPastSessions, onMockInterview, onOnlineTest, onDock, user, onLogout, onCvsChange }: Props) {
+export default function Dashboard({ onPastSessions, onDock, user, onLogout, onCvsChange }: Props) {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
   const [cvs, setCvs] = useState<CV[]>([])
   const cvFileInputRef = useRef<HTMLInputElement>(null)
@@ -168,7 +111,6 @@ export default function Dashboard({ onNewSession, onPastSessions, onMockIntervie
     'there'
   const firstName = greetingName.split(/\s+/)[0]
   const hasRecent = metrics && metrics.recentSessions.length > 0
-  const showAdminSolved = isAdminEmail(user.email)
 
   const stats = [
     { label: 'Total sessions', value: metrics?.totalSessions ?? 0, color: '#4F80E2' },
@@ -176,14 +118,12 @@ export default function Dashboard({ onNewSession, onPastSessions, onMockIntervie
     { label: 'Saved CVs', value: cvs.length, color: '#F59E0B' },
   ]
 
-  const props = { onNewSession, onPastSessions, onMockInterview, onOnlineTest, onDock, user, onLogout, onCvsChange }
-
   return (
     <div className="dash-root" ref={rootRef}>
       <header className="dash-header">
         <div className="dash-header-text">
           <h1 className="dash-header-title">Welcome, {firstName}</h1>
-          <p className="dash-header-sub">What would you like to work on today?</p>
+          <p className="dash-header-sub">Your overview and recent activity.</p>
         </div>
         <WindowControls onDock={onDock} />
       </header>
@@ -203,45 +143,6 @@ export default function Dashboard({ onNewSession, onPastSessions, onMockIntervie
             ))}
           </div>
         </section>
-
-        <section className="dash-actions-section" aria-label="Start a session">
-          <div className="dash-actions-grid">
-            {SESSION_TYPES.map((s) => {
-              const locked = s.premium && !user.is_premium
-              const handler = s.onClick(props)
-              return (
-                <div
-                  key={s.id}
-                  className={`dash-action-card${locked ? ' dash-action-locked' : ''}`}
-                  style={{ '--action-accent': s.color, '--action-bg': s.bg, '--action-border': s.border } as React.CSSProperties}
-                >
-                  <div className="dash-action-top">
-                    <span className="dash-action-icon" style={{ background: s.bg, borderColor: s.border, color: s.color }}>
-                      {s.icon}
-                    </span>
-                    <div className="dash-action-copy">
-                      <div className="dash-action-title">
-                        {s.title}
-                        {locked && <span className="dash-action-lock" aria-label="Premium feature">🔒</span>}
-                      </div>
-                      <p className="dash-action-desc">{s.desc}</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className={`dash-action-btn ${s.btnClass}`}
-                    onClick={locked ? undefined : handler}
-                    disabled={locked}
-                  >
-                    {s.label}
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-
-        {showAdminSolved && <AdminSolvedManager />}
 
         {hasRecent && (
           <section className="dash-recent-section" aria-label="Recent sessions">

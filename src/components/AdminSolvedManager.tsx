@@ -15,7 +15,11 @@ function preview(text: string, max = 90): string {
   return t.slice(0, max) + '…'
 }
 
-export default function AdminSolvedManager() {
+interface Props {
+  standalone?: boolean
+}
+
+export default function AdminSolvedManager({ standalone = false }: Props) {
   const [rows, setRows] = useState<SolvedRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -103,10 +107,10 @@ export default function AdminSolvedManager() {
   const totalCount = rows.length
 
   return (
-    <section className="dash-admin-solved" aria-label="Manage Solved Assessment">
+    <section className={`dash-admin-solved${standalone ? ' dash-admin-solved--standalone' : ''}`} aria-label="Manage Solved Assessment">
       <div className="dash-admin-solved-head">
         <div>
-          <span className="dash-section-label">Admin · Solved Assessment</span>
+          {!standalone && <span className="dash-section-label">Admin · Solved Assessment</span>}
           <p className="dash-admin-solved-sub">
             {loading ? 'Loading…' : `${totalCount} question${totalCount !== 1 ? 's' : ''} in the bank`}
           </p>
@@ -128,7 +132,7 @@ export default function AdminSolvedManager() {
 
       {!loading && groups.length === 0 && (
         <p className="dash-admin-solved-empty">
-          {search.trim() ? 'No matches.' : 'No solved questions yet. Send captures from the Screenshot Library.'}
+          {search.trim() ? 'No matches.' : 'No solved questions yet. Send captures from the Assessment Archive.'}
         </p>
       )}
 

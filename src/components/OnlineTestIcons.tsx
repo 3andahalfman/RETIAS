@@ -12,6 +12,7 @@ export const ONLINE_TEST_ACCENTS = {
   amber: { color: '#F59E0B', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.22)' },
   violet: { color: '#A78BFA', bg: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.22)' },
   slate: { color: '#94A3B8', bg: 'rgba(148,163,184,0.12)', border: 'rgba(148,163,184,0.22)' },
+  emerald: { color: '#4ADE80', bg: 'rgba(74,222,128,0.12)', border: 'rgba(74,222,128,0.22)' },
 } as const satisfies Record<string, OnlineTestAccent>
 
 const S = { strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' as const, stroke: 'currentColor' }
@@ -96,6 +97,15 @@ export function IconOnboarding({ size = 20 }: { size?: number }) {
     <svg width={size} height={size} viewBox="0 0 24 24" {...S}>
       <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-3" />
       <path d="M9 9v.01M9 12v.01M9 15v.01M9 18v.01" />
+    </svg>
+  )
+}
+
+export function IconGeneral({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...S}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 8v4l3 3" />
     </svg>
   )
 }

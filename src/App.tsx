@@ -11,7 +11,7 @@ import PastSessions from './components/PastSessions'
 import Tutorial from './components/Tutorial'
 import UpdateBanner from './components/UpdateBanner'
 import Toolbar from './components/Toolbar'
-import Sidebar from './components/Sidebar'
+import Sidebar, { type SidebarItemId } from './components/Sidebar'
 import TranscriptPanel from './components/Transcript'
 import AnswerPanel from './components/AnswerPanel'
 import AudioCapture from './components/AudioCapture'
@@ -22,10 +22,11 @@ import { isAdminEmail } from './lib/admin'
 import { invalidateSupabaseSessionSync } from './lib/supabase'
 import PricingPage from './components/PricingPage'
 import AdminScreenshotDashboard from './components/AdminScreenshotDashboard'
+import AdminSolvedPage from './components/AdminSolvedPage'
 import AutoTyper from './components/AutoTyper'
 import './index.css'
 
-type View = 'dashboard' | 'setup' | 'mock-interview' | 'past-sessions' | 'session' | 'online-test-entry' | 'online-test' | 'solve-test' | 'cv-manager' | 'auto-typer' | 'settings' | 'admin-screenshots' | 'pricing'
+type View = 'dashboard' | 'setup' | 'mock-interview' | 'past-sessions' | 'session' | 'online-test-entry' | 'online-test' | 'solve-test' | 'cv-manager' | 'auto-typer' | 'settings' | 'admin-screenshots' | 'admin-solved' | 'pricing'
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -247,7 +248,7 @@ export default function App() {
   }
 
   // Docked non-session views
-  if (isDocked && (view === 'setup' || view === 'dashboard' || view === 'mock-interview' || view === 'online-test-entry' || view === 'online-test' || view === 'solve-test' || view === 'past-sessions' || view === 'cv-manager' || view === 'auto-typer' || view === 'settings' || view === 'admin-screenshots' || view === 'pricing')) {
+  if (isDocked && (view === 'setup' || view === 'dashboard' || view === 'mock-interview' || view === 'online-test-entry' || view === 'online-test' || view === 'solve-test' || view === 'past-sessions' || view === 'cv-manager' || view === 'auto-typer' || view === 'settings' || view === 'admin-screenshots' || view === 'admin-solved' || view === 'pricing')) {
     return (
       <div className="app-root docked">
         <div
@@ -263,13 +264,17 @@ export default function App() {
     )
   }
 
-  const handleSidebarNavigate = (item: 'dashboard' | 'sessions' | 'cv-manager' | 'auto-typer' | 'settings' | 'admin-screenshots') => {
-    if (item === 'sessions') setView('past-sessions')
+  const handleSidebarNavigate = (item: SidebarItemId) => {
+    if (item === 'real-interview') setView('setup')
+    else if (item === 'mock-interview') setView('mock-interview')
+    else if (item === 'online-assessment') setView('online-test-entry')
+    else if (item === 'sessions') setView('past-sessions')
     else if (item === 'dashboard') setView('dashboard')
     else if (item === 'cv-manager') setView('cv-manager')
     else if (item === 'auto-typer') setView('auto-typer')
     else if (item === 'settings') setView('settings')
     else if (item === 'admin-screenshots') setView('admin-screenshots')
+    else if (item === 'admin-solved') setView('admin-solved')
   }
 
   if (view === 'dashboard') {
@@ -280,10 +285,7 @@ export default function App() {
           <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={() => setView('pricing')} />
           <div className="page-main">
             <Dashboard
-              onNewSession={() => setView('setup')}
               onPastSessions={() => setView('past-sessions')}
-              onMockInterview={() => setView('mock-interview')}
-              onOnlineTest={() => setView('online-test-entry')}
               onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
               user={user}
               onLogout={handleLogout}
@@ -300,7 +302,7 @@ export default function App() {
     return (
       <div className="app-root">
         <div className="page-layout">
-          <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={() => setView('pricing')} />
+          <Sidebar activeItem="mock-interview" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={() => setView('pricing')} />
           <div className="page-main">
             <MockInterviewSetup
               onCreateSession={handleCreateSession}
@@ -318,7 +320,7 @@ export default function App() {
     return (
       <div className="app-root">
         <div className="page-layout">
-          <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={() => setView('pricing')} />
+          <Sidebar activeItem="real-interview" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={() => setView('pricing')} />
           <div className="page-main">
             <SetupWizard
               onCreateSession={handleCreateSession}
@@ -349,7 +351,7 @@ export default function App() {
     return (
       <div className="app-root">
         <div className="page-layout">
-          <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={() => setView('pricing')} />
+          <Sidebar activeItem="online-assessment" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={() => setView('pricing')} />
           <div className="page-main">
             <OnlineTestEntry
               user={user}
@@ -368,7 +370,7 @@ export default function App() {
     return (
       <div className="app-root">
         <div className="page-layout">
-          <Sidebar activeItem="dashboard" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={() => setView('pricing')} />
+          <Sidebar activeItem="online-assessment" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={() => setView('pricing')} />
           <div className="page-main">
             <SolvedTestPage
               user={user}
@@ -470,6 +472,19 @@ export default function App() {
           <Sidebar activeItem="admin-screenshots" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={() => setView('pricing')} />
           <div className="page-main">
             <AdminScreenshotDashboard onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }} />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (view === 'admin-solved') {
+    return (
+      <div className="app-root">
+        <div className="page-layout">
+          <Sidebar activeItem="admin-solved" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={() => setView('pricing')} />
+          <div className="page-main">
+            <AdminSolvedPage onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }} />
           </div>
         </div>
       </div>

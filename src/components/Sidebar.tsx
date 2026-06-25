@@ -1,25 +1,76 @@
 import { useState } from 'react'
 import { isAdminEmail } from '../lib/admin'
 
+export type SidebarItemId =
+  | 'dashboard'
+  | 'real-interview'
+  | 'mock-interview'
+  | 'online-assessment'
+  | 'sessions'
+  | 'cv-manager'
+  | 'auto-typer'
+  | 'settings'
+  | 'admin-screenshots'
+  | 'admin-solved'
+
 interface SidebarProps {
-  activeItem: 'dashboard' | 'sessions' | 'cv-manager' | 'auto-typer' | 'settings' | 'admin-screenshots'
+  activeItem: SidebarItemId
   user: User
-  onNavigate: (item: 'dashboard' | 'sessions' | 'cv-manager' | 'auto-typer' | 'settings' | 'admin-screenshots') => void
+  onNavigate: (item: SidebarItemId) => void
   onLogout?: () => void
   onUpgrade?: () => void
 }
 
 const COLLAPSED_KEY = 'retias-sidebar-collapsed'
 
-const navItems: { id: 'dashboard' | 'sessions' | 'cv-manager' | 'auto-typer'; label: string; icon: string }[] = [
-  { id: 'dashboard',  label: 'Dashboard',  icon: '⊞' },
-  { id: 'sessions',   label: 'Sessions',   icon: '⏱' },
-  { id: 'cv-manager', label: 'CV Manager', icon: '📄' },
-  { id: 'auto-typer', label: 'Auto-Typer', icon: '⌨' },
-]
+interface NavItem {
+  id: SidebarItemId
+  label: string
+  icon: string
+  accent?: string
+  premium?: boolean
+}
 
-const settingsItem = { id: 'settings' as const, label: 'Settings', icon: '⚙' }
-const adminItem = { id: 'admin-screenshots' as const, label: 'Screenshot Library', icon: '📸' }
+interface NavSection {
+  label: string
+  items: NavItem[]
+  adminOnly?: boolean
+}
+
+const NAV_SECTIONS: NavSection[] = [
+  {
+    label: 'Home',
+    items: [{ id: 'dashboard', label: 'Dashboard', icon: '⊞' }],
+  },
+  {
+    label: 'Start',
+    items: [
+      { id: 'real-interview', label: 'Real Interview', icon: '◫', accent: '#4F80E2' },
+      { id: 'mock-interview', label: 'Mock Interview', icon: '◎', accent: '#15CDCA' },
+      { id: 'online-assessment', label: 'Online Assessment', icon: '⟨⟩', accent: '#F59E0B', premium: true },
+    ],
+  },
+  {
+    label: 'Interview',
+    items: [
+      { id: 'sessions', label: 'Past Sessions', icon: '⏱' },
+      { id: 'cv-manager', label: 'CV Manager', icon: '📄' },
+      { id: 'auto-typer', label: 'Auto-Typer', icon: '⌨' },
+    ],
+  },
+  {
+    label: 'Admin',
+    adminOnly: true,
+    items: [
+      { id: 'admin-screenshots', label: 'Assessment Archive', icon: '🗂️' },
+      { id: 'admin-solved', label: 'Solved Bank', icon: '📚' },
+    ],
+  },
+  {
+    label: 'Account',
+    items: [{ id: 'settings', label: 'Settings', icon: '⚙' }],
+  },
+]
 
 function CollapseIcon({ expanded }: { expanded: boolean }) {
   return (
@@ -38,9 +89,7 @@ export default function Sidebar({ activeItem, user, onNavigate, onLogout, onUpgr
 
   const initials = (user.display_name || user.email || '?').slice(0, 2).toUpperCase()
   const showAdmin = isAdminEmail(user.email)
-  const items = showAdmin
-    ? [...navItems, adminItem, settingsItem]
-    : [...navItems, settingsItem]
+  const sections = NAV_SECTIONS.filter((section) => !section.adminOnly || showAdmin)
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
@@ -51,6 +100,15 @@ export default function Sidebar({ activeItem, user, onNavigate, onLogout, onUpgr
   }
 
   const profileTitle = `${user.display_name || user.email}${user.email ? `\n${user.email}` : ''}`
+
+  const handleNavClick = (item: NavItem) => {
+    const locked = item.premium && !user.is_premium
+    if (locked) {
+      onUpgrade?.()
+      return
+    }
+    onNavigate(item.id)
+  }
 
   return (
     <div className={`page-sidebar${collapsed ? ' collapsed' : ''}`}>
@@ -68,20 +126,36 @@ export default function Sidebar({ activeItem, user, onNavigate, onLogout, onUpgr
         </button>
       </div>
 
-      <div className="sidebar-section-label">MAIN</div>
-
-      {items.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          className={`sidebar-nav-item${activeItem === item.id ? ' active' : ''}`}
-          title={item.label}
-          onClick={() => onNavigate(item.id)}
-        >
-          <span className="sidebar-nav-icon">{item.icon}</span>
-          <span className="sidebar-nav-label">{item.label}</span>
-        </button>
-      ))}
+      <nav className="sidebar-nav" aria-label="Main navigation">
+        {sections.map((section) => (
+          <div key={section.label} className="sidebar-nav-section">
+            <div className="sidebar-section-label">{section.label}</div>
+            {section.items.map((item) => {
+              const locked = item.premium && !user.is_premium
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`sidebar-nav-item${activeItem === item.id ? ' active' : ''}${locked ? ' locked' : ''}`}
+                  title={locked ? `${item.label} — Premium feature` : item.label}
+                  onClick={() => handleNavClick(item)}
+                >
+                  <span
+                    className="sidebar-nav-icon"
+                    style={item.accent ? { color: item.accent } : undefined}
+                  >
+                    {item.icon}
+                  </span>
+                  <span className="sidebar-nav-label">
+                    {item.label}
+                    {locked && <span className="sidebar-nav-lock" aria-hidden>🔒</span>}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        ))}
+      </nav>
 
       <div className="sidebar-spacer" />
 

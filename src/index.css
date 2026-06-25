@@ -174,7 +174,7 @@ html, body, #root {
   color: rgba(255, 255, 255, 0.85);
 }
 .sidebar-nav-icon { flex-shrink: 0; width: 18px; text-align: center; }
-.sidebar-nav-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-nav-label { display: inline-flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-signout-icon { display: none; line-height: 0; }
 .sidebar-signout-label { display: inline; }
 
@@ -223,7 +223,26 @@ html, body, #root {
 .page-sidebar.collapsed .sidebar-signout-icon {
   display: inline;
 }
-.sidebar-section-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.6px; color:rgba(255,255,255,0.35); padding:4px 8px; }
+.sidebar-section-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.6px; color:rgba(255,255,255,0.35); padding:4px 8px 2px; }
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex-shrink: 1;
+}
+.sidebar-nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 6px;
+}
+.sidebar-nav-section:not(:last-child) {
+  margin-bottom: 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
 .sidebar-nav-item {
   display:flex; align-items:center; gap:10px; height:40px; padding:0 12px;
   border-radius:8px; border:1px solid transparent; cursor:pointer;
@@ -236,6 +255,9 @@ html, body, #root {
   background:rgba(79,128,226,0.15); border-color:rgba(79,128,226,0.25);
   color:#fff; font-weight:600;
 }
+.sidebar-nav-item.locked { opacity: 0.72; }
+.sidebar-nav-item.locked:hover { opacity: 0.85; }
+.sidebar-nav-lock { margin-left: 4px; font-size: 10px; flex-shrink: 0; }
 .sidebar-spacer { flex:1; }
 .sidebar-upgrade-card {
   background:#0D1830; border:1px solid #1A2540; border-radius:12px; padding:12px;
@@ -4574,13 +4596,31 @@ html, body, #root {
   border: 1px solid rgba(245, 158, 11, 0.25);
 }
 
-/* Admin — manage Solved Assessment bank from Dashboard */
+/* Admin — manage Solved Assessment bank */
 .dash-admin-solved {
   margin-top: 8px;
   padding: 16px 18px;
   border-radius: 12px;
   border: 1px solid rgba(248, 113, 113, 0.22);
   background: rgba(248, 113, 113, 0.04);
+}
+.dash-admin-solved--standalone {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+.admin-solved-page-main {
+  padding-top: 0;
+}
+.dash-admin-solved--standalone .dash-admin-solved-groups {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 .dash-admin-solved-head {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;

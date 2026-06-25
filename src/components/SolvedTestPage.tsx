@@ -457,7 +457,7 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
 
         {!loading && !error && rows.length === 0 && (
           <div className="solved-test-empty">
-            No solved questions yet. The admin transfers them from the Screenshot Library.
+            No questions in the library yet. Check back soon — new assessments are added regularly.
           </div>
         )}
 
