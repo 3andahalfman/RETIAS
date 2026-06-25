@@ -134,7 +134,7 @@ export default function Settings({ user, onLogout, onUserUpdate, onUpgrade }: Pr
   const [settings, setSettings] = useState<AppSettings>(loadSettings)
   const [activeSection, setActiveSection] = useState<Section>('AI & Model')
   const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([])
-  const [appVersion, setAppVersion] = useState('1.7.0')
+  const [appVersion, setAppVersion] = useState('1.7.1')
   const [displayName, setDisplayName] = useState(user.display_name || '')
   const [savingName, setSavingName] = useState(false)
   const [clearConfirm, setClearConfirm] = useState(false)
