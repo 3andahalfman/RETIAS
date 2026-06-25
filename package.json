@@ -1,12 +1,12 @@
 {
   "name": "retias",
-  "version": "1.6.6",
+  "version": "1.7.0",
   "description": "Real Time Interview Assistant Software â€” AI-powered real-time coaching",
   "main": "dist/electron/main.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
     "dev:vite": "vite",
-    "dev:electron": "tsc -p tsconfig.electron.json && npx wait-on http://localhost:5173 -t 30000 && env -u ELECTRON_RUN_AS_NODE NODE_ENV=development node_modules/.bin/electron .",
+    "dev:electron": "tsc -p tsconfig.electron.json && npx wait-on http://localhost:5173 -t 30000 && node scripts/dev-electron.cjs",
     "build": "node scripts/generate-env.cjs && vite build && tsc -p tsconfig.electron.json",
     "package": "npm run build && electron-builder",
     "package:win": "npm run build && electron-builder --win",
@@ -16,6 +16,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3",
     "@deepgram/sdk": "^3.13.0",
+    "@nut-tree-fork/nut-js": "^4.2.6",
     "@ricky0123/vad-web": "^0.0.19",
     "@supabase/supabase-js": "^2.99.1",
     "@types/react-syntax-highlighter": "^15.5.13",
@@ -85,7 +86,8 @@
       "node_modules/naudiodon/**",
       "node_modules/sql.js/dist/sql-wasm.wasm",
       "node_modules/pdf-parse/**",
-      "node_modules/mammoth/**"
+      "node_modules/mammoth/**",
+      "node_modules/@nut-tree-fork/**"
     ]
   },
   "devDependencies": {

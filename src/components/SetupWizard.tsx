@@ -1,4 +1,6 @@
 import { useState, useRef } from 'react'
+import { loadSettings } from './Settings'
+import WindowControls from './WindowControls'
 
 const ROLE_PRESETS = [
   'Senior Software Engineer in Test',
@@ -26,6 +28,7 @@ interface SetupProps {
   onDock: () => void
   onBack?: () => void
   cvs?: CV[]
+  user?: User
 }
 
 export interface SessionConfig {
@@ -55,7 +58,8 @@ function ValidationModal({ message, onClose }: { message: string; onClose: () =>
   )
 }
 
-export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [] }: SetupProps) {
+export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [], user }: SetupProps) {
+  const isPremium = user?.is_premium ?? false
   const [step, setStep] = useState<1 | 2>(1)
   const [validationMsg, setValidationMsg] = useState('')
   const [scraping, setScraping] = useState(false)
@@ -72,10 +76,9 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [] 
   const [language, setLanguage] = useState('English')
   const [simpleLanguage, setSimpleLanguage] = useState(false)
   const [extraContext, setExtraContext] = useState(DEFAULT_EXTRA_CONTEXT)
-  const [aiModel, setAiModel] = useState('claude-sonnet')
+  const [aiModel, setAiModel] = useState(() => loadSettings().aiModel || 'claude-sonnet-4-6')
   const [autoGenerate, setAutoGenerate] = useState(true)
 
-  const [showSnapGrid, setShowSnapGrid] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -168,25 +171,7 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [] 
             )}
           </div>
           <div className="setup-inner-topbar-right">
-            <div className="snap-btn-wrapper">
-              <button type="button" className="setup-window-btn" title="Snap layout" onClick={() => setShowSnapGrid(!showSnapGrid)}>✥</button>
-              {showSnapGrid && (
-                <div className="snap-grid-dropdown">
-                  <div className="snap-grid-row">
-                    <button type="button" className="snap-grid-cell" title="Top Left"    onClick={() => { window.electronAPI?.snapWindow('tl'); setShowSnapGrid(false) }} />
-                    <button type="button" className="snap-grid-cell" title="Top Middle"  onClick={() => { window.electronAPI?.snapWindow('tm'); setShowSnapGrid(false) }} />
-                    <button type="button" className="snap-grid-cell" title="Top Right"   onClick={() => { window.electronAPI?.snapWindow('tr'); setShowSnapGrid(false) }} />
-                  </div>
-                  <div className="snap-grid-row">
-                    <button type="button" className="snap-grid-cell" title="Bottom Left"   onClick={() => { window.electronAPI?.snapWindow('bl'); setShowSnapGrid(false) }} />
-                    <button type="button" className="snap-grid-cell" title="Bottom Middle" onClick={() => { window.electronAPI?.snapWindow('bm'); setShowSnapGrid(false) }} />
-                    <button type="button" className="snap-grid-cell" title="Bottom Right"  onClick={() => { window.electronAPI?.snapWindow('br'); setShowSnapGrid(false) }} />
-                  </div>
-                </div>
-              )}
-            </div>
-            <button type="button" className="setup-window-btn" title="Dock" onClick={onDock}>↙</button>
-            <button type="button" className="setup-window-btn close" title="Close" onClick={() => window.electronAPI?.closeWindow()}>✕</button>
+            <WindowControls onDock={onDock} />
           </div>
         </div>
 
@@ -351,11 +336,14 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [] 
                 <div className="ai-model-select">
                   <span className="setup-ai-icon">⚛️</span>
                   <span className="setup-ai-name">
-                    {aiModel === 'claude-sonnet' && 'Claude Sonnet 4.6'}
-                    {aiModel === 'claude-haiku' && 'Claude Haiku 4.5'}
+                    {aiModel === 'claude-sonnet-4-6' && 'Claude Sonnet 4.6'}
+                    {aiModel === 'claude-opus-4-5' && 'Claude Opus 4.5'}
+                    {aiModel.startsWith('claude-haiku') && 'Claude Haiku 4.5'}
+                    {aiModel.startsWith('gpt-') && aiModel.toUpperCase().replace('GPT-', 'GPT ')}
                   </span>
-                  {aiModel === 'claude-sonnet' && <span className="ai-badge">Recommended</span>}
-                  {aiModel === 'claude-haiku' && <span className="ai-speed">Fast</span>}
+                  {aiModel === 'claude-sonnet-4-6' && <span className="ai-badge">Recommended</span>}
+                  {aiModel === 'claude-opus-4-5' && <span className="ai-badge">Top reasoning</span>}
+                  {aiModel.startsWith('claude-haiku') && <span className="ai-speed">Fast</span>}
                   <span className="setup-ai-chevron">⌄</span>
                   <select
                     id="ai-model"
@@ -363,8 +351,11 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [] 
                     value={aiModel}
                     onChange={(e) => setAiModel(e.target.value)}
                   >
-                    <option value="claude-sonnet">Claude Sonnet 4.6</option>
-                    <option value="claude-haiku">Claude Haiku 4.5</option>
+                    <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
+                    <option value="claude-opus-4-5" disabled={!isPremium}>
+                      Claude Opus 4.5{!isPremium ? ' — 🔒 Premium' : ''}
+                    </option>
+                    <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
                   </select>
                 </div>
               </div>

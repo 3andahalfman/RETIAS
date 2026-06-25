@@ -19,6 +19,13 @@ import { createHmac } from 'node:crypto'
 const PAYSTACK_SECRET_KEY = Deno.env.get('PAYSTACK_SECRET_KEY') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+const PLAN_PLUS = Deno.env.get('PAYSTACK_PLAN_PLUS') ?? ''
+
+function oneMonthFromNow(): string {
+  const d = new Date()
+  d.setMonth(d.getMonth() + 1)
+  return d.toISOString()
+}
 
 function verifySignature(rawBody: string, signature: string): boolean {
   if (!signature || !PAYSTACK_SECRET_KEY) return false
@@ -42,18 +49,56 @@ async function findUserIdByEmail(
   return null
 }
 
-async function setPremium(
+// Activate (or renew) a paid subscription: write the subscriptions row (source of
+// truth) + cached flags on app_metadata.
+async function activate(
   admin: ReturnType<typeof createClient>,
   userId: string,
-  isPremium: boolean,
-  extra: Record<string, unknown> = {},
+  opts: { tier: 'pro' | 'plus'; planCode?: string; subscriptionCode?: string; customerCode?: string },
 ): Promise<void> {
+  const now = new Date().toISOString()
+  await admin.from('subscriptions').upsert({
+    user_id: userId,
+    provider: 'paystack',
+    customer_code: opts.customerCode ?? null,
+    subscription_code: opts.subscriptionCode ?? null,
+    plan_code: opts.planCode ?? null,
+    tier: opts.tier,
+    status: 'active',
+    current_period_end: oneMonthFromNow(),
+    updated_at: now,
+  }, { onConflict: 'user_id' })
+
   await admin.auth.admin.updateUserById(userId, {
     app_metadata: {
-      is_premium: isPremium,
-      ...extra,
+      is_premium: true,
+      is_premium_plus: opts.tier === 'plus',
+      premium_tier: opts.tier,
+      paystack_customer_code: opts.customerCode ?? null,
+      paystack_subscription_code: opts.subscriptionCode ?? null,
+      premium_activated_at: now,
     },
   })
+}
+
+// Mark the subscription with a new status and, when it ends access, clear flags.
+async function setStatus(
+  admin: ReturnType<typeof createClient>,
+  userId: string,
+  status: 'past_due' | 'canceled',
+): Promise<void> {
+  const now = new Date().toISOString()
+  await admin.from('subscriptions').update({ status, updated_at: now }).eq('user_id', userId)
+  if (status === 'canceled') {
+    await admin.auth.admin.updateUserById(userId, {
+      app_metadata: {
+        is_premium: false,
+        is_premium_plus: false,
+        premium_tier: null,
+        premium_deactivated_at: now,
+      },
+    })
+  }
 }
 
 Deno.serve(async (req) => {
@@ -89,6 +134,10 @@ Deno.serve(async (req) => {
   const subscriptionCode = (data.subscription_code as string | undefined)
     ?? (data.plan as { subscription_code?: string } | undefined)?.subscription_code
     ?? ''
+  const planCode = (data.plan as { plan_code?: string } | undefined)?.plan_code
+    ?? (typeof data.plan === 'string' ? (data.plan as string) : undefined)
+    ?? ''
+  const tier: 'pro' | 'plus' = planCode && PLAN_PLUS && planCode === PLAN_PLUS ? 'plus' : 'pro'
 
   // Prefer user_id from metadata if available (set by frontend on first checkout)
   let userId: string | null = metadata.user_id ?? null
@@ -106,32 +155,29 @@ Deno.serve(async (req) => {
   }
 
   switch (eventType) {
-    case 'charge.success': {
-      await setPremium(admin, userId, true, {
-        paystack_customer_code: customer.customer_code ?? null,
-        paystack_subscription_code: subscriptionCode || null,
-        premium_activated_at: new Date().toISOString(),
-      })
-      break
-    }
+    // First charge + monthly renewals → activate/extend
+    case 'charge.success':
     case 'subscription.create': {
-      await setPremium(admin, userId, true, {
-        paystack_customer_code: customer.customer_code ?? null,
-        paystack_subscription_code: subscriptionCode || null,
+      await activate(admin, userId, {
+        tier,
+        planCode: planCode || undefined,
+        subscriptionCode: subscriptionCode || undefined,
+        customerCode: customer.customer_code,
       })
       break
     }
-    case 'subscription.disable':
-    case 'subscription.expiring_cards': {
-      if (eventType === 'subscription.disable') {
-        await setPremium(admin, userId, false, {
-          premium_deactivated_at: new Date().toISOString(),
-        })
-      }
+    // Card failed on renewal → mark past_due but keep access until it disables
+    case 'invoice.payment_failed': {
+      await setStatus(admin, userId, 'past_due')
+      break
+    }
+    // Subscription ended/cancelled → revoke access
+    case 'subscription.disable': {
+      await setStatus(admin, userId, 'canceled')
       break
     }
     default:
-      // Unhandled event — acknowledge anyway
+      // Unhandled event (subscription.not_renew, expiring_cards, etc.) — acknowledge
       break
   }
 

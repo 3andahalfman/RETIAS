@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react'
 import type { SessionConfig } from './SetupWizard'
+import { loadSettings } from './Settings'
+import WindowControls from './WindowControls'
 
 interface Props {
   onCreateSession: (config: SessionConfig) => void
@@ -15,7 +17,6 @@ export default function MockInterviewSetup({ onCreateSession, onBack, onDock, cv
   const [editableJD, setEditableJD] = useState('')
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState('')
-  const [showSnapGrid, setShowSnapGrid] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,7 +76,7 @@ export default function MockInterviewSetup({ onCreateSession, onBack, onDock, cv
       language: 'English',
       extraContext: 'This is a mock interview. Answer confidently and concisely.',
       autoGenerate: true,
-      aiModel: 'claude-sonnet',
+      aiModel: loadSettings().aiModel || 'claude-sonnet-4-6',
     })
   }
 
@@ -89,25 +90,7 @@ export default function MockInterviewSetup({ onCreateSession, onBack, onDock, cv
           </button>
         </div>
         <div className="setup-inner-topbar-right">
-          <div className="snap-btn-wrapper">
-            <button type="button" className="setup-window-btn" title="Snap layout" onClick={() => setShowSnapGrid(!showSnapGrid)}>✥</button>
-            {showSnapGrid && (
-              <div className="snap-grid-dropdown">
-                <div className="snap-grid-row">
-                  <button type="button" className="snap-grid-cell" title="Top Left"    onClick={() => { window.electronAPI?.snapWindow('tl'); setShowSnapGrid(false) }} />
-                  <button type="button" className="snap-grid-cell" title="Top Middle"  onClick={() => { window.electronAPI?.snapWindow('tm'); setShowSnapGrid(false) }} />
-                  <button type="button" className="snap-grid-cell" title="Top Right"   onClick={() => { window.electronAPI?.snapWindow('tr'); setShowSnapGrid(false) }} />
-                </div>
-                <div className="snap-grid-row">
-                  <button type="button" className="snap-grid-cell" title="Bottom Left"   onClick={() => { window.electronAPI?.snapWindow('bl'); setShowSnapGrid(false) }} />
-                  <button type="button" className="snap-grid-cell" title="Bottom Middle" onClick={() => { window.electronAPI?.snapWindow('bm'); setShowSnapGrid(false) }} />
-                  <button type="button" className="snap-grid-cell" title="Bottom Right"  onClick={() => { window.electronAPI?.snapWindow('br'); setShowSnapGrid(false) }} />
-                </div>
-              </div>
-            )}
-          </div>
-          <button type="button" className="setup-window-btn" title="Dock" onClick={onDock}>↙</button>
-          <button type="button" className="setup-window-btn close" title="Close" onClick={() => window.electronAPI?.closeWindow()}>✕</button>
+          <WindowControls onDock={onDock} />
         </div>
       </div>
 

@@ -1,58 +1,25 @@
-import { useEffect, useState } from 'react'
-
-type UpdateState = 'idle' | 'available' | 'downloading' | 'ready'
-
-const UPDATE_KEY = 'retias_update_first_seen'
+import { useAppNotifications } from '../lib/notification-store'
 
 export default function UpdateBanner() {
-  const [state, setState] = useState<UpdateState>('idle')
-  const [version, setVersion] = useState('')
-  const [progress, setProgress] = useState(0)
-  const [dismissed, setDismissed] = useState(false)
+  const { visible, phase, version, progress, dismiss, download, install } = useAppNotifications()
 
-  useEffect(() => {
-    const api = (window as any).electronAPI
-    if (!api) return
-
-    api.onUpdateAvailable?.((v: string) => {
-      setVersion(v)
-      setState('available')
-      // Record first time this update was seen — used for forced-update gate after 2 days
-      if (!localStorage.getItem(UPDATE_KEY)) {
-        localStorage.setItem(UPDATE_KEY, JSON.stringify({ version: v, since: Date.now() }))
-      }
-    })
-
-    api.onUpdateProgress?.((pct: number) => {
-      setProgress(pct)
-      setState('downloading')
-    })
-
-    api.onUpdateDownloaded?.(() => {
-      setState('ready')
-    })
-  }, [])
-
-  if (dismissed || state === 'idle') return null
+  if (!visible) return null
 
   return (
     <div className="update-banner">
-      {state === 'available' && (
+      {phase === 'available' && (
         <>
           <span className="update-banner-text">
             Version <strong>{version}</strong> is available
           </span>
-          <button className="update-banner-btn primary" onClick={() => {
-            ;(window as any).electronAPI?.downloadUpdate()
-            setState('downloading')
-          }}>
+          <button type="button" className="update-banner-btn primary" onClick={download}>
             Download
           </button>
-          <button className="update-banner-btn dismiss" onClick={() => setDismissed(true)}>✕</button>
+          <button type="button" className="update-banner-btn dismiss" onClick={dismiss}>✕</button>
         </>
       )}
 
-      {state === 'downloading' && (
+      {phase === 'downloading' && (
         <>
           <span className="update-banner-text">Downloading update… {progress}%</span>
           <div className="update-banner-bar">
@@ -61,15 +28,13 @@ export default function UpdateBanner() {
         </>
       )}
 
-      {state === 'ready' && (
+      {phase === 'ready' && (
         <>
           <span className="update-banner-text">Update ready — restart to apply</span>
-          <button className="update-banner-btn primary" onClick={() => {
-            ;(window as any).electronAPI?.installUpdate()
-          }}>
+          <button type="button" className="update-banner-btn primary" onClick={install}>
             Restart & Install
           </button>
-          <button className="update-banner-btn dismiss" onClick={() => setDismissed(true)}>Later</button>
+          <button type="button" className="update-banner-btn dismiss" onClick={dismiss}>Later</button>
         </>
       )}
     </div>

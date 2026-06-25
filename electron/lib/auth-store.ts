@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
+import { assertDesktopDeviceAllowed } from './device-binding.js'
 
 export interface User {
   id: string
@@ -8,6 +9,7 @@ export interface User {
   google_id: string | null
   created_at: number
   is_premium: boolean
+  is_premium_plus: boolean
 }
 
 function mapUser(u: SupabaseUser): User {
@@ -24,7 +26,8 @@ function mapUser(u: SupabaseUser): User {
       ? (googleIdentity.identity_data?.sub ?? null)
       : null,
     created_at: new Date(u.created_at).getTime(),
-    is_premium: u.app_metadata?.is_premium === true,
+    is_premium: u.app_metadata?.is_premium === true || u.app_metadata?.is_premium_plus === true,
+    is_premium_plus: u.app_metadata?.is_premium_plus === true,
   }
 }
 
@@ -71,7 +74,10 @@ export async function createUser(
     console.error('[auth-store] profile insert error:', profileError.message)
   }
 
-  return mapUser(data.user)
+  const user = mapUser(data.user)
+  const { data: sessionData } = await supabase.auth.getSession()
+  if (sessionData.session) await assertDesktopDeviceAllowed()
+  return user
 }
 
 export async function loginUser(email: string, password: string): Promise<User> {
@@ -81,7 +87,9 @@ export async function loginUser(email: string, password: string): Promise<User> 
   })
   if (error) throw new Error(error.message)
   if (!data.user) throw new Error('Login failed')
-  return mapUser(data.user)
+  const user = mapUser(data.user)
+  await assertDesktopDeviceAllowed()
+  return user
 }
 
 export async function findOrCreateGoogleUser(
@@ -98,7 +106,11 @@ export async function findOrCreateGoogleUser(
       email: normalizedEmail,
       password: derivedPassword,
     })
-  if (!signInError && signInData.user) return mapUser(signInData.user)
+  if (!signInError && signInData.user) {
+    const user = mapUser(signInData.user)
+    await assertDesktopDeviceAllowed()
+    return user
+  }
 
   // Create new account
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
@@ -113,7 +125,10 @@ export async function findOrCreateGoogleUser(
   })
   if (signUpError) throw new Error(signUpError.message)
   if (!signUpData.user) throw new Error('Google sign-in failed')
-  return mapUser(signUpData.user)
+  const user = mapUser(signUpData.user)
+  const { data: sessionData } = await supabase.auth.getSession()
+  if (sessionData.session) await assertDesktopDeviceAllowed()
+  return user
 }
 
 export async function getUserById(userId: string): Promise<User | null> {
@@ -124,6 +139,13 @@ export async function getUserById(userId: string): Promise<User | null> {
   if (!userData.user) return null
   // Accept any valid session — userId is used for matching by the caller
   if (userData.user.id !== userId) return null
+
+  try {
+    await assertDesktopDeviceAllowed()
+  } catch {
+    await supabase.auth.signOut()
+    return null
+  }
 
   return mapUser(userData.user)
 }

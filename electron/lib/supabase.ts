@@ -1,12 +1,17 @@
 import { createClient } from '@supabase/supabase-js'
-import { safeStorage } from 'electron'
+import electron from 'electron'
 import fs from 'fs'
 import path from 'path'
-import { app } from 'electron'
+
+const { app, safeStorage } = electron as typeof import('electron')
 
 let tokenPath: string | null = null
 
-function getTokenPath(): string {
+function getTokenPath(): string | null {
+  // Electron `app` is unavailable in worker_threads and any context where
+  // `require('electron')` returns just the binary path string. In that case
+  // we fall back to in-memory storage so the Supabase client still constructs.
+  if (!app || typeof app.getPath !== 'function') return null
   if (!tokenPath) {
     // .enc suffix signals the file is encrypted — never overwrite with plaintext
     tokenPath = path.join(app.getPath('userData'), 'sb-session.enc')
@@ -16,12 +21,18 @@ function getTokenPath(): string {
 
 // ── Encrypted storage helpers ───────────────────────────────────────────────
 
+// In-memory fallback when Electron `app` is unavailable (worker_threads,
+// ELECTRON_RUN_AS_NODE) so the Supabase client can still construct without
+// throwing. No session persistence in that case — calls just no-op.
+const memoryStore: Record<string, string> = {}
+
 function loadData(): Record<string, string> {
   const filePath = getTokenPath()
+  if (!filePath) return memoryStore
   if (!fs.existsSync(filePath)) return {}
   try {
     const raw = fs.readFileSync(filePath)
-    if (safeStorage.isEncryptionAvailable()) {
+    if (safeStorage?.isEncryptionAvailable?.()) {
       const decrypted = safeStorage.decryptString(raw)
       return JSON.parse(decrypted)
     }
@@ -33,17 +44,24 @@ function loadData(): Record<string, string> {
 }
 
 function saveData(data: Record<string, string>): void {
-  if (safeStorage.isEncryptionAvailable()) {
+  const filePath = getTokenPath()
+  if (!filePath) {
+    // No Electron app context — keep in memory so the auth client doesn't crash
+    Object.assign(memoryStore, data)
+    return
+  }
+  if (safeStorage?.isEncryptionAvailable?.()) {
     const encrypted = safeStorage.encryptString(JSON.stringify(data))
-    fs.writeFileSync(getTokenPath(), encrypted)
+    fs.writeFileSync(filePath, encrypted)
   } else {
     // safeStorage unavailable — write as plaintext fallback
-    fs.writeFileSync(getTokenPath(), JSON.stringify(data), 'utf-8')
+    fs.writeFileSync(filePath, JSON.stringify(data), 'utf-8')
   }
 }
 
 // Migrate plaintext session file written by versions < 1.4.9
 function migrateLegacySession(): void {
+  if (!app || typeof app.getPath !== 'function') return
   const legacyPath = path.join(app.getPath('userData'), 'sb-session.json')
   if (!fs.existsSync(legacyPath)) return
   try {

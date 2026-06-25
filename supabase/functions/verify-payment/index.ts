@@ -12,6 +12,31 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
 const PAYSTACK_SECRET_KEY = Deno.env.get('PAYSTACK_SECRET_KEY') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+// Plan codes for tier mapping (set via `supabase secrets set`). Plus → premium_plus.
+const PLAN_PLUS = Deno.env.get('PAYSTACK_PLAN_PLUS') ?? ''
+
+// Monthly subscription → period ends one month from now (renewals extend it).
+function oneMonthFromNow(): string {
+  const d = new Date()
+  d.setMonth(d.getMonth() + 1)
+  return d.toISOString()
+}
+
+// The inline transaction verify doesn't reliably return the subscription_code,
+// so resolve it from the customer's subscriptions (matching the plan just bought).
+async function resolveSubscriptionCode(customerCode: string, planCode?: string): Promise<string | undefined> {
+  try {
+    const res = await fetch(`https://api.paystack.co/customer/${encodeURIComponent(customerCode)}`, {
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` },
+    })
+    if (!res.ok) return undefined
+    const body = await res.json()
+    const subs = (body?.data?.subscriptions ?? []) as Array<{ subscription_code?: string; status?: string; plan?: { plan_code?: string } }>
+    const match = subs.find((s) => s.plan?.plan_code === planCode && (s.status === 'active' || s.status === 'non-renewing' || s.status === 'attention'))
+      ?? subs[subs.length - 1]
+    return match?.subscription_code
+  } catch { return undefined }
+}
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -98,15 +123,41 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Payment email mismatch' }, 403)
   }
 
-  // Activate premium on the user's app_metadata
-  const subscriptionCode: string | undefined = tx.plan_object?.subscription_code ?? tx.subscription?.subscription_code
+  // Determine tier from the plan code on the transaction
+  const planCode: string | undefined = tx.plan_object?.plan_code ?? (typeof tx.plan === 'string' ? tx.plan : undefined)
+  const tier: 'pro' | 'plus' = planCode && PLAN_PLUS && planCode === PLAN_PLUS ? 'plus' : 'pro'
   const customerCode: string | undefined = tx.customer?.customer_code
+  let subscriptionCode: string | undefined = tx.plan_object?.subscription_code ?? tx.subscription?.subscription_code
+  if (!subscriptionCode && customerCode) {
+    subscriptionCode = await resolveSubscriptionCode(customerCode, planCode)
+  }
+  const periodEnd = oneMonthFromNow()
 
+  // 1. Source of truth: subscriptions table (one row per user)
+  const { error: subError } = await supabaseAdmin.from('subscriptions').upsert({
+    user_id: userId,
+    provider: 'paystack',
+    customer_code: customerCode ?? null,
+    subscription_code: subscriptionCode ?? null,
+    plan_code: planCode ?? null,
+    tier,
+    status: 'active',
+    current_period_end: periodEnd,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id' })
+
+  if (subError) {
+    return jsonResponse({ error: `Activation failed: ${subError.message}` }, 500)
+  }
+
+  // 2. Cached flags on app_metadata (read by the desktop + web apps)
   const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
     app_metadata: {
       is_premium: true,
+      is_premium_plus: tier === 'plus',
       paystack_customer_code: customerCode ?? null,
       paystack_subscription_code: subscriptionCode ?? null,
+      premium_tier: tier,
       premium_activated_at: new Date().toISOString(),
     },
   })
@@ -118,6 +169,8 @@ Deno.serve(async (req) => {
   return jsonResponse({
     success: true,
     is_premium: true,
+    is_premium_plus: tier === 'plus',
+    tier,
     reference,
   })
 })

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import DockIcon from './DockIcon'
 
 interface Props {
   cvs: CV[]
@@ -88,14 +89,6 @@ export default function CvManager({ cvs, onCvsChange, onDock }: Props) {
           CV Manager
         </div>
         <div className="cv-manager-header-actions">
-          <button
-            type="button"
-            className="cv-upload-btn"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-          >
-            {uploading ? '⏳ Uploading…' : '+ Upload CV'}
-          </button>
           {/* Snap */}
           <div className="snap-btn-wrapper" ref={snapRef}>
             <button type="button" className="dash-wc-btn dash-wc-snap" title="Snap layout" onClick={() => setSnapOpen(!snapOpen)}>
@@ -121,10 +114,7 @@ export default function CvManager({ cvs, onCvsChange, onDock }: Props) {
           </div>
           {/* Dock */}
           <button type="button" className="dash-wc-btn dash-wc-dock" title="Dock" onClick={onDock}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
-              <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
-            </svg>
+            <DockIcon />
           </button>
           {/* Close */}
           <button type="button" className="dash-wc-btn dash-wc-close" title="Close" onClick={() => window.electronAPI?.closeWindow()}>
@@ -146,6 +136,19 @@ export default function CvManager({ cvs, onCvsChange, onDock }: Props) {
       <div className="cv-manager-body">
         {/* Left — CV list */}
         <div className="cv-list-panel">
+          {cvs.length > 0 && (
+            <div className="cv-list-panel-header">
+              <span className="cv-list-panel-label">Your CVs</span>
+              <button
+                type="button"
+                className="cv-upload-btn cv-upload-btn--compact"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+              >
+                {uploading ? '⏳ Uploading…' : '+ Upload CV'}
+              </button>
+            </div>
+          )}
           {cvs.length === 0 ? (
             <div className="cv-empty-state">
               <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

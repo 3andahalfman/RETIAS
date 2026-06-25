@@ -3,9 +3,11 @@ import { useState, useRef, useEffect } from 'react'
 interface ManualPromptBarProps {
   sessionActive: boolean
   isPremium: boolean
+  /** Grey out while browsing solved Q&A (before live assessment starts) */
+  browseMode?: boolean
 }
 
-export default function ManualPromptBar({ sessionActive, isPremium }: ManualPromptBarProps) {
+export default function ManualPromptBar({ sessionActive, isPremium, browseMode = false }: ManualPromptBarProps) {
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -41,25 +43,30 @@ export default function ManualPromptBar({ sessionActive, isPremium }: ManualProm
   }
 
   return (
-    <div className={`manual-prompt-bar${!isPremium ? ' locked' : ''}`}>
-      {!isPremium && <span className="manual-prompt-lock">🔒</span>}
+    <div className={`manual-prompt-bar${!isPremium ? ' locked' : ''}${browseMode ? ' browse-mode' : ''}`}>
+      {browseMode && <span className="manual-prompt-browse-hint">Start live assessment to chat with AI</span>}
+      {!isPremium && !browseMode && <span className="manual-prompt-lock">🔒</span>}
       <input
         ref={inputRef}
         type="text"
         className="manual-prompt-input"
-        placeholder={isPremium ? 'Type a message...' : 'Premium — upgrade to ask questions'}
+        placeholder={
+          browseMode ? 'Available in live assessment…'
+          : isPremium ? 'Type a message…'
+          : 'Premium — upgrade to ask questions'
+        }
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
-        disabled={!isPremium || sending || !sessionActive}
+        disabled={browseMode || !isPremium || sending || !sessionActive}
         maxLength={2000}
       />
       <button
         type="button"
         className={`manual-prompt-send${sending ? ' sending' : ''}`}
         onClick={handleSend}
-        disabled={!isPremium || sending || !text.trim() || !sessionActive}
-        title={isPremium ? 'Send (Enter)' : 'Premium feature'}
+        disabled={browseMode || !isPremium || sending || !text.trim() || !sessionActive}
+        title={browseMode ? 'Start live assessment first' : isPremium ? 'Send (Enter)' : 'Premium feature'}
       >
         {sending ? '⏳' : 'Send'}
       </button>

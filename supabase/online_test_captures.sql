@@ -16,8 +16,19 @@ CREATE TABLE IF NOT EXISTS online_test_captures (
   score_completeness NUMERIC(5,2),
   score_overall    NUMERIC(5,2),
   score_notes      TEXT,
+  extracted_questions TEXT,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Backfill for existing deployments (safe to re-run)
+ALTER TABLE online_test_captures
+  ADD COLUMN IF NOT EXISTS extracted_questions TEXT,
+  ADD COLUMN IF NOT EXISTS detected_test_type  TEXT,
+  ADD COLUMN IF NOT EXISTS detected_platform   TEXT,
+  ADD COLUMN IF NOT EXISTS source_url          TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_online_test_captures_session
+  ON online_test_captures (session_id);
 
 ALTER TABLE online_test_captures ENABLE ROW LEVEL SECURITY;
 
@@ -29,6 +40,11 @@ CREATE POLICY "Users insert own online test captures"
 -- Admin dashboard — read all captures
 CREATE POLICY "Admin reads all online test captures"
   ON online_test_captures FOR SELECT
+  USING ((auth.jwt() ->> 'email') = 'admin@retias.com');
+
+-- Admin dashboard — delete captures (single or by session)
+CREATE POLICY "Admin deletes online test captures"
+  ON online_test_captures FOR DELETE
   USING ((auth.jwt() ->> 'email') = 'admin@retias.com');
 
 CREATE INDEX IF NOT EXISTS idx_online_test_captures_created
@@ -68,4 +84,12 @@ CREATE POLICY "Admin reads online test screenshots"
       (auth.jwt() ->> 'email') = 'admin@retias.com'
       OR auth.uid()::text = (storage.foldername(name))[1]
     )
+  );
+
+-- Admin can delete screenshots so cleanups remove the storage object too
+CREATE POLICY "Admin deletes online test screenshots"
+  ON storage.objects FOR DELETE
+  USING (
+    bucket_id = 'online-test-screenshots'
+    AND (auth.jwt() ->> 'email') = 'admin@retias.com'
   );

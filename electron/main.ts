@@ -3,6 +3,7 @@ import { autoUpdater } from 'electron-updater'
 import { createOverlayWindow } from './overlay-window.js'
 import { IpcBus } from './ipc-bus.js'
 import { logger } from './lib/logger.js'
+import { autoTyper, AutoTypeStatus, AutoTypeCountdown } from './lib/auto-typer.js'
 import dotenv from 'dotenv'
 import { join } from 'node:path'
 
@@ -36,6 +37,7 @@ let ipcBus: IpcBus
 let currentUserId: string | null = null
 let currentUserEmail: string | null = null
 let currentUserIsPremium = false
+let currentUserIsPremiumPlus = false
 
 // ── Auth rate limiting ──────────────────────────────────────────────────────
 // Track failed attempts per email; lock out for LOCKOUT_MS after MAX_FAILS
@@ -122,10 +124,14 @@ async function bootstrap() {
   // interfere with desktopCapturer.getSources when called later from a protected
   // context, so we grab it up front and reuse it in the handler.
   try {
+    const primaryId = String(screen.getPrimaryDisplay().id)
     const sources = await desktopCapturer.getSources({ types: ['screen'] })
-    if (sources.length > 0) {
-      cachedScreenSource = sources[0]
-      console.log('[Main] Screen source pre-cached:', sources[0].name)
+    cachedScreenSource =
+      sources.find((s) => s.display_id === primaryId)
+      ?? sources[0]
+      ?? null
+    if (cachedScreenSource) {
+      console.log('[Main] Screen source pre-cached (primary display):', cachedScreenSource.name)
     }
   } catch (err) {
     console.warn('[Main] Failed to pre-cache screen source:', err)
@@ -171,6 +177,28 @@ async function bootstrap() {
 
   globalShortcut.register('Alt+C', () => {
     ipcBus.emit('overlay:copy')
+  })
+
+  // Auto-Typer hotkeys — only useful while a session is active, but registering
+  // them globally is harmless when idle (the engine no-ops).
+  globalShortcut.register('Alt+T', () => {
+    if (autoTyper.isRunning) autoTyper.togglePause()
+  })
+
+  globalShortcut.register('Alt+Shift+T', () => {
+    if (autoTyper.isRunning) autoTyper.stop()
+  })
+
+  // Forward Auto-Typer engine events to the renderer.
+  autoTyper.on('status', (status: AutoTypeStatus) => {
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      overlayWindow.webContents.send('autotype:status', status)
+    }
+  })
+  autoTyper.on('countdown', (payload: AutoTypeCountdown) => {
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      overlayWindow.webContents.send('autotype:countdown', payload)
+    }
   })
 
   // Audio chunks from renderer
@@ -246,14 +274,20 @@ async function bootstrap() {
     ipcBus.emit('screen:analyse', base64)
   })
 
-  // Capture screenshot and return base64 to renderer (no LLM call)
+  // Capture screenshot and return base64 to renderer (no LLM call).
+  // When multiple displays are connected we always pick the primary display
+  // so users can keep the AI/answer panel on a secondary monitor.
   ipcMain.handle('screen:capture', async () => {
     if (!currentUserIsPremium) throw new Error('Screen Analysis is a premium feature. Upgrade your account to use it.')
+    const primary = screen.getPrimaryDisplay()
+    const { width: pw, height: ph } = primary.size
     const sources = await desktopCapturer.getSources({
       types: ['screen'],
-      thumbnailSize: { width: 1280, height: 720 },
+      thumbnailSize: { width: pw, height: ph },
     })
-    const source = sources[0]
+    const source =
+      sources.find((s) => s.display_id === String(primary.id))
+      ?? sources[0]
     if (!source) throw new Error('No screen source found')
     const png = source.thumbnail.toPNG()
     return Buffer.from(png).toString('base64')
@@ -287,8 +321,10 @@ async function bootstrap() {
       userEmail: currentUserEmail ?? undefined,
     }
     // Refresh screen source cache at session start in case displays changed since startup
+    const primaryId = String(screen.getPrimaryDisplay().id)
     desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
-      if (sources.length > 0) cachedScreenSource = sources[0]
+      const primary = sources.find((s) => s.display_id === primaryId) ?? sources[0]
+      if (primary) cachedScreenSource = primary
     }).catch(() => { /* keep existing cache */ })
     ipcBus.startSession(safeConfig).catch(console.error)
   })
@@ -303,6 +339,48 @@ async function bootstrap() {
 
   ipcMain.on('answer:regenerate', () => {
     ipcBus.emit('overlay:regenerate')
+  })
+
+  // ── Auto-Typer ───────────────────────────────────────────────────────────
+  // The renderer kicks off a typing session via `autotype:start`. We don't
+  // wait for the full session to finish before returning — the engine reports
+  // progress and completion asynchronously via `autotype:status` events. This
+  // means the renderer doesn't get blocked on a multi-minute invoke.
+  const MAX_AUTOTYPE_LEN = 100_000
+  ipcMain.handle('autotype:start', async (_e, opts: unknown) => {
+    if (!opts || typeof opts !== 'object') throw new Error('Invalid auto-type options')
+    const { text, wpm, jitterPct, countdownMs, typoRate } = opts as Record<string, unknown>
+    if (typeof text !== 'string' || !text.trim()) throw new Error('Auto-type text cannot be empty')
+    if (text.length > MAX_AUTOTYPE_LEN) {
+      throw new Error(`Auto-type text exceeds the ${MAX_AUTOTYPE_LEN.toLocaleString()} character limit.`)
+    }
+    if (autoTyper.isRunning) {
+      throw new Error('Auto-Typer is already running. Stop the current session first.')
+    }
+    // Fire and forget — engine emits status events as it progresses.
+    autoTyper.start({
+      text,
+      wpm: typeof wpm === 'number' ? wpm : 60,
+      jitterPct: typeof jitterPct === 'number' ? jitterPct : 0.2,
+      countdownMs: typeof countdownMs === 'number' ? countdownMs : 3000,
+      typoRate: typeof typoRate === 'number' ? typoRate : 0,
+    }).catch((err) => {
+      console.error('[AutoTyper] start failed:', err?.message ?? err)
+    })
+    return { ok: true }
+  })
+
+  ipcMain.on('autotype:pause', () => { autoTyper.pause() })
+  ipcMain.on('autotype:resume', () => { autoTyper.resume() })
+  ipcMain.on('autotype:stop', () => { autoTyper.stop() })
+  ipcMain.on('autotype:update-pace', (_e, opts: unknown) => {
+    if (!opts || typeof opts !== 'object') return
+    const { wpm, jitterPct, typoRate } = opts as Record<string, unknown>
+    autoTyper.updateSettings({
+      wpm: typeof wpm === 'number' ? wpm : undefined,
+      jitterPct: typeof jitterPct === 'number' ? jitterPct : undefined,
+      typoRate: typeof typoRate === 'number' ? typoRate : undefined,
+    })
   })
 
   // Past sessions
@@ -345,6 +423,7 @@ async function bootstrap() {
       currentUserId = user.id
       currentUserEmail = user.email
       currentUserIsPremium = user.is_premium
+      currentUserIsPremiumPlus = user.is_premium_plus
       return user
     } catch (err) {
       recordAuthFailure(safeEmail)
@@ -363,6 +442,7 @@ async function bootstrap() {
       currentUserId = user.id
       currentUserEmail = user.email
       currentUserIsPremium = user.is_premium
+      currentUserIsPremiumPlus = user.is_premium_plus
       return user
     } catch (err) {
       recordAuthFailure(safeEmail)
@@ -372,6 +452,11 @@ async function bootstrap() {
 
   ipcMain.handle('auth:google-available', () => {
     return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
+  })
+
+  ipcMain.handle('auth:device-owner', async () => {
+    const { getRegisteredDeviceEmail } = await import('./lib/device-binding.js')
+    return getRegisteredDeviceEmail()
   })
 
   ipcMain.handle('auth:google', async () => {
@@ -385,6 +470,7 @@ async function bootstrap() {
     currentUserId = user.id
     currentUserEmail = user.email
     currentUserIsPremium = user.is_premium
+    currentUserIsPremiumPlus = user.is_premium_plus
     return user
   })
 
@@ -395,6 +481,7 @@ async function bootstrap() {
       currentUserId = user.id
       currentUserEmail = user.email
       currentUserIsPremium = user.is_premium
+      currentUserIsPremiumPlus = user.is_premium_plus
     }
     return user
   })
@@ -403,8 +490,89 @@ async function bootstrap() {
     currentUserId = null
     currentUserEmail = null
     currentUserIsPremium = false
+    currentUserIsPremiumPlus = false
     const { authLogout } = await import('./lib/auth-store.js')
     await authLogout().catch(() => {})
+  })
+
+  // Hand the renderer's Supabase client a copy of the main-process session so
+  // direct writes (e.g. admin inserts into solved_questions) carry the user's
+  // JWT instead of going through as anonymous.
+  // ── Paraphrase / humanise solved-assessment answers ───────────────────────
+
+  // Admin import: generate the 5 base variants for a freshly-added answer.
+  ipcMain.handle('paraphrase:generate-variants', async (_e, answer: unknown) => {
+    if (typeof answer !== 'string' || !answer.trim()) return []
+    const { generateBaseVariants } = await import('./lib/paraphrase.js')
+    return generateBaseVariants(answer)
+  })
+
+  // User view: personalise (or return cached) answer for a specific question.
+  // Admin gate not required — any signed-in user with access to the row
+  // through RLS can call this; we trust the row payload they pass in.
+  ipcMain.handle('paraphrase:personalize', async (_e, payload: unknown) => {
+    if (!payload || typeof payload !== 'object') return null
+    const { questionId, variants, fallbackAnswer } = payload as {
+      questionId?: string
+      variants?: string[]
+      fallbackAnswer?: string
+    }
+    if (!questionId || typeof fallbackAnswer !== 'string') return null
+    if (!currentUserId) return null
+
+    const { supabase } = await import('./lib/supabase.js')
+
+    // Cache hit → return immediately, no LLM call
+    const { data: cached } = await supabase
+      .from('solved_answer_user_cache')
+      .select('variant_text')
+      .eq('question_id', questionId)
+      .eq('user_id', currentUserId)
+      .maybeSingle()
+    if (cached?.variant_text) return cached.variant_text
+
+    const { personaliseForUser } = await import('./lib/paraphrase.js')
+    const result = await personaliseForUser({
+      variants: Array.isArray(variants) ? variants : [],
+      fallbackAnswer,
+      userId: currentUserId,
+      questionId,
+    })
+    if (!result) return fallbackAnswer
+
+    await supabase.from('solved_answer_user_cache').insert({
+      question_id: questionId,
+      user_id: currentUserId,
+      variant_text: result.text,
+      base_variant_idx: result.baseIdx,
+    }).then(({ error }) => {
+      if (error) console.warn('[paraphrase] cache insert failed:', error.message)
+    })
+
+    return result.text
+  })
+
+  // User highlight: rewrite only the selected snippet.
+  //   - 'paraphrase'      : Standard paraphrase
+  //   - 'humanize'        : Humanize (AI-tell removal pass)
+  //   - 'humanize-strong' : Humanize then Standard chained (Re-rephrase)
+  ipcMain.handle('paraphrase:selection', async (_e, payload: unknown) => {
+    if (!payload || typeof payload !== 'object') return null
+    const { text, mode } = payload as { text?: string; mode?: string }
+    if (typeof text !== 'string' || !text.trim()) return null
+    if (mode !== 'paraphrase' && mode !== 'humanize' && mode !== 'humanize-strong') return null
+    const { rewriteSelection } = await import('./lib/paraphrase.js')
+    return rewriteSelection(text.trim(), mode)
+  })
+
+  ipcMain.handle('auth:get-session', async () => {
+    const { supabase } = await import('./lib/supabase.js')
+    const { data } = await supabase.auth.getSession()
+    if (!data.session) return null
+    return {
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+    }
   })
 
   // Refresh the Supabase session so the JWT picks up updated app_metadata
@@ -419,6 +587,7 @@ async function bootstrap() {
       currentUserId = user.id
       currentUserEmail = user.email
       currentUserIsPremium = user.is_premium
+      currentUserIsPremiumPlus = user.is_premium_plus
     }
     return user
   })
@@ -436,6 +605,25 @@ async function bootstrap() {
     return { captures, stats }
   })
 
+  ipcMain.handle('admin:screenshot-library-overview', async () => {
+    const { isAdminEmail } = await import('./lib/admin.js')
+    if (!isAdminEmail(currentUserEmail)) throw new Error('Unauthorized')
+    const { getOnlineTestCaptureStats, listOnlineTestCaptureUsers } = await import('./lib/screenshot-store.js')
+    const [stats, users] = await Promise.all([
+      getOnlineTestCaptureStats(),
+      listOnlineTestCaptureUsers(),
+    ])
+    return { stats, users }
+  })
+
+  ipcMain.handle('admin:list-captures-for-user', async (_e, email: unknown) => {
+    const { isAdminEmail } = await import('./lib/admin.js')
+    if (!isAdminEmail(currentUserEmail)) throw new Error('Unauthorized')
+    if (typeof email !== 'string' || !email.trim()) throw new Error('Invalid email')
+    const { listCapturesForUser } = await import('./lib/screenshot-store.js')
+    return listCapturesForUser(email.trim())
+  })
+
   ipcMain.handle('admin:get-screenshot-url', async (_e, path: string) => {
     const { isAdminEmail } = await import('./lib/admin.js')
     if (!isAdminEmail(currentUserEmail)) throw new Error('Unauthorized')
@@ -444,6 +632,46 @@ async function bootstrap() {
     }
     const { getScreenshotSignedUrl } = await import('./lib/screenshot-store.js')
     return getScreenshotSignedUrl(path)
+  })
+
+  ipcMain.handle('admin:upsert-solved-questions', async (_e, rows: unknown) => {
+    const { isAdminEmail } = await import('./lib/admin.js')
+    if (!isAdminEmail(currentUserEmail)) throw new Error('Unauthorized')
+    if (!Array.isArray(rows) || !rows.length) throw new Error('No questions to send')
+    const { upsertSolvedQuestions } = await import('./lib/solved-questions-store.js')
+    return upsertSolvedQuestions(rows as import('./lib/solved-questions-store.js').UpsertSolvedPayload[])
+  })
+
+  ipcMain.handle('solved:list-questions', async () => {
+    const { isAdminEmail } = await import('./lib/admin.js')
+    if (!currentUserId) throw new Error('Not authenticated')
+    if (!currentUserIsPremiumPlus && !isAdminEmail(currentUserEmail)) {
+      throw new Error('Premium Plus required to browse the Solved Assessment bank')
+    }
+    const { listSolvedQuestions } = await import('./lib/solved-questions-store.js')
+    return listSolvedQuestions()
+  })
+
+  ipcMain.handle('solved:delete-questions', async (_e, ids: unknown) => {
+    const { isAdminEmail } = await import('./lib/admin.js')
+    if (!isAdminEmail(currentUserEmail)) throw new Error('Admin only')
+    if (!Array.isArray(ids) || !ids.every((id) => typeof id === 'string' && id.trim())) {
+      throw new Error('Invalid question ids')
+    }
+    const { deleteSolvedQuestions } = await import('./lib/solved-questions-store.js')
+    return deleteSolvedQuestions(ids as string[])
+  })
+
+  ipcMain.handle('solved:delete-assessment', async (_e, payload: unknown) => {
+    const { isAdminEmail } = await import('./lib/admin.js')
+    if (!isAdminEmail(currentUserEmail)) throw new Error('Admin only')
+    if (!payload || typeof payload !== 'object') throw new Error('Invalid payload')
+    const { platform, assessment_type } = payload as { platform?: string; assessment_type?: string }
+    if (!platform?.trim() || !assessment_type?.trim()) {
+      throw new Error('platform and assessment_type are required')
+    }
+    const { deleteSolvedAssessment } = await import('./lib/solved-questions-store.js')
+    return deleteSolvedAssessment(platform.trim(), assessment_type.trim())
   })
 
   // ── CV handlers ────────────────────────────────────────────────────────────
@@ -719,6 +947,10 @@ async function bootstrap() {
     if (overlayWindow) {
       overlayWindow.setAlwaysOnTop(value, 'screen-saver')
     }
+  })
+
+  ipcMain.on('window:set-stealth-mode', (_event, enabled: boolean) => {
+    overlayWindow?.setContentProtection(enabled)
   })
 
   ipcMain.handle('app:get-version', () => {

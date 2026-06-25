@@ -50,6 +50,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Window control
   setWindowOpacity: (opacity: number) => ipcRenderer.send('window:set-opacity', opacity),
   setAlwaysOnTop: (value: boolean) => ipcRenderer.send('window:set-always-on-top', value),
+  setStealthMode: (enabled: boolean) => ipcRenderer.send('window:set-stealth-mode', enabled),
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version'),
   clearAllSessions: (): Promise<void> => ipcRenderer.invoke('data:clear-all-sessions'),
   updateDisplayName: (displayName: string): Promise<void> => ipcRenderer.invoke('auth:update-display-name', displayName),
@@ -93,10 +94,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   authRegister: (email: string, password: string, displayName: string) => ipcRenderer.invoke('auth:register', email, password, displayName),
   authLogin: (email: string, password: string) => ipcRenderer.invoke('auth:login', email, password),
   authGoogleAvailable: () => ipcRenderer.invoke('auth:google-available'),
+  authDeviceOwner: () => ipcRenderer.invoke('auth:device-owner') as Promise<string | null>,
   authGoogle: () => ipcRenderer.invoke('auth:google'),
   authRestore: (userId: string) => ipcRenderer.invoke('auth:restore', userId),
   authLogout: () => ipcRenderer.send('auth:logout'),
   authRefresh: () => ipcRenderer.invoke('auth:refresh'),
+  authGetSession: () => ipcRenderer.invoke('auth:get-session'),
+
+  // Paraphrase / humanise solved-assessment answers
+  paraphraseGenerateVariants: (answer: string) =>
+    ipcRenderer.invoke('paraphrase:generate-variants', answer),
+  paraphrasePersonalize: (payload: { questionId: string; variants: string[]; fallbackAnswer: string }) =>
+    ipcRenderer.invoke('paraphrase:personalize', payload),
+  paraphraseSelection: (payload: { text: string; mode: 'paraphrase' | 'humanize' | 'humanize-strong' }) =>
+    ipcRenderer.invoke('paraphrase:selection', payload),
 
   // CVs
   saveCv: (name: string, content: string) => ipcRenderer.invoke('cv:save', name, content),
@@ -106,7 +117,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Admin screenshot library
   adminListScreenshots: (offset = 0, limit = 50) =>
     ipcRenderer.invoke('admin:list-screenshots', offset, limit),
+  adminScreenshotLibraryOverview: () => ipcRenderer.invoke('admin:screenshot-library-overview'),
+  adminListCapturesForUser: (email: string) => ipcRenderer.invoke('admin:list-captures-for-user', email),
   adminGetScreenshotUrl: (path: string) => ipcRenderer.invoke('admin:get-screenshot-url', path),
+  adminUpsertSolvedQuestions: (rows: Array<{
+    platform: string
+    assessment_type: string
+    question: string
+    answer: string
+    answer_variants?: string[]
+    paraphrase_enabled: boolean
+    source_capture_id: string | null
+    source_url: string | null
+  }>) => ipcRenderer.invoke('admin:upsert-solved-questions', rows),
+
+  listSolvedQuestions: () => ipcRenderer.invoke('solved:list-questions'),
+  deleteSolvedQuestions: (ids: string[]) => ipcRenderer.invoke('solved:delete-questions', ids),
+  deleteSolvedAssessment: (payload: { platform: string; assessment_type: string }) =>
+    ipcRenderer.invoke('solved:delete-assessment', payload),
 
   // Auto-updater
   onUpdateAvailable: (cb: (version: string) => void) => ipcRenderer.on('update:available', (_e, version) => cb(version)),
@@ -118,7 +146,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Window position (for draggable dock)
   getWindowPosition: () => ipcRenderer.invoke('window:get-position'),
   setWindowPosition: (x: number, y: number) => ipcRenderer.send('window:set-position', x, y),
+
+  // Auto-Typer
+  autoTypeStart: (opts: { text: string; wpm: number; jitterPct: number; countdownMs: number; typoRate?: number }) =>
+    ipcRenderer.invoke('autotype:start', opts),
+  autoTypePause: () => ipcRenderer.send('autotype:pause'),
+  autoTypeResume: () => ipcRenderer.send('autotype:resume'),
+  autoTypeStop: () => ipcRenderer.send('autotype:stop'),
+  autoTypeUpdatePace: (opts: { wpm?: number; jitterPct?: number; typoRate?: number }) =>
+    ipcRenderer.send('autotype:update-pace', opts),
+  onAutoTypeStatus: (cb: (status: AutoTypeStatusPayload) => void) => {
+    ipcRenderer.removeAllListeners('autotype:status')
+    ipcRenderer.on('autotype:status', (_e, status) => cb(status))
+  },
+  onAutoTypeCountdown: (cb: (payload: { secondsLeft: number; totalSeconds: number }) => void) => {
+    ipcRenderer.removeAllListeners('autotype:countdown')
+    ipcRenderer.on('autotype:countdown', (_e, payload) => cb(payload))
+  },
 })
+
+interface AutoTypeStatusPayload {
+  state: 'idle' | 'countdown' | 'typing' | 'paused' | 'done' | 'error'
+  charsTyped: number
+  totalChars: number
+  remainingMs: number
+  error?: string
+}
 
 interface SessionConfig {
   micDeviceId?: string

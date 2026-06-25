@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
+import DockIcon from './DockIcon'
 
 interface Props {
   onNewSession?: () => void
@@ -77,7 +78,7 @@ export default function PastSessions({ onNewSession, onDock }: Props) {
     const company = (s.company || '').toLowerCase()
     const role = (s.target_role || '').toLowerCase()
     if (company.includes('mock') || role.includes('mock')) return 'Mock'
-    if (company.includes('online') || role.includes('test') || role.includes('assessment')) return 'Online Test'
+    if (company.includes('online') || role.includes('test') || role.includes('assessment')) return 'Online Assessment'
     return 'Interview'
   }
 
@@ -177,10 +178,7 @@ export default function PastSessions({ onNewSession, onDock }: Props) {
             )}
           </div>
           <button type="button" className="dash-wc-btn dash-wc-dock" title="Dock" onClick={onDock}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
-              <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
-            </svg>
+            <DockIcon />
           </button>
           <button type="button" className="dash-wc-btn dash-wc-close" title="Close" onClick={() => window.electronAPI?.closeWindow()}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -214,7 +212,7 @@ export default function PastSessions({ onNewSession, onDock }: Props) {
               className={`ps-filter-tab${filterType === f ? ' active' : ''}`}
               onClick={() => setFilterType(f)}
             >
-              {f === 'all' ? 'All' : f === 'online-test' ? 'Online Test' : f.charAt(0).toUpperCase() + f.slice(1)}
+              {f === 'all' ? 'All' : f === 'online-test' ? 'Online Assessment' : f.charAt(0).toUpperCase() + f.slice(1)}
             </button>
           ))}
         </div>

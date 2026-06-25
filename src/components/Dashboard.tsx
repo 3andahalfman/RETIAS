@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import WindowControls from './WindowControls'
+import AdminSolvedManager from './AdminSolvedManager'
+import { isAdminEmail } from '../lib/admin'
 
 interface DashboardMetrics {
   totalSessions: number
@@ -27,9 +30,60 @@ interface Props {
   onCvsChange?: () => void
 }
 
+const SESSION_TYPES = [
+  {
+    id: 'real',
+    title: 'Real Interview',
+    desc: 'Live coaching for a real job application',
+    color: '#4F80E2',
+    bg: 'rgba(79,128,226,0.12)',
+    border: 'rgba(79,128,226,0.22)',
+    btnClass: 'dash-action-btn-blue',
+    label: 'New Session',
+    onClick: (p: Props) => p.onNewSession,
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'mock',
+    title: 'Mock Interview',
+    desc: 'Practice with a YouTube mock interviewer',
+    color: '#15CDCA',
+    bg: 'rgba(21,205,202,0.12)',
+    border: 'rgba(21,205,202,0.22)',
+    btnClass: 'dash-action-btn-teal',
+    label: 'Start Mock',
+    onClick: (p: Props) => p.onMockInterview,
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'test',
+    title: 'Online Assessment',
+    desc: 'Coding challenges with real-time AI help',
+    color: '#F59E0B',
+    bg: 'rgba(245,158,11,0.12)',
+    border: 'rgba(245,158,11,0.22)',
+    btnClass: 'dash-action-btn-amber',
+    label: 'Start Test',
+    premium: true,
+    onClick: (p: Props) => p.onOnlineTest,
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+      </svg>
+    ),
+  },
+] as const
+
 export default function Dashboard({ onNewSession, onPastSessions, onMockInterview, onOnlineTest, onDock, user, onLogout, onCvsChange }: Props) {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
-  const [showSnapGrid, setShowSnapGrid] = useState(false)
   const [cvs, setCvs] = useState<CV[]>([])
   const cvFileInputRef = useRef<HTMLInputElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -83,7 +137,7 @@ export default function Dashboard({ onNewSession, onPastSessions, onMockIntervie
     const diffDays = Math.floor((now.getTime() - d.getTime()) / 86400000)
     if (diffDays === 0) return `Today, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
     if (diffDays === 1) return `Yesterday, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-    return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}`
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
   }
 
   function formatDuration(started: number, ended: number | null) {
@@ -98,196 +152,136 @@ export default function Dashboard({ onNewSession, onPastSessions, onMockIntervie
     const c = (company || '').toLowerCase()
     const r = (role || '').toLowerCase()
     if (c.includes('mock') || r.includes('mock')) return 'Mock'
-    if (c.includes('online') || r.includes('test') || r.includes('assessment')) return 'Online Test'
+    if (c.includes('online') || r.includes('test') || r.includes('assessment')) return 'Online Assessment'
     return 'Real Interview'
   }
 
-  function getTypeDotColor(type: string) {
+  function getTypeColor(type: string) {
     if (type === 'Mock') return '#15CDCA'
-    if (type === 'Online Test') return '#F59E0B'
+    if (type === 'Online Assessment') return '#F59E0B'
     return '#4F80E2'
   }
 
   const firstName = user.display_name?.split(' ')[0] || user.email?.split('@')[0] || 'there'
+  const hasRecent = metrics && metrics.recentSessions.length > 0
+  const showAdminSolved = isAdminEmail(user.email)
+
+  const stats = [
+    { label: 'Total sessions', value: metrics?.totalSessions ?? 0, color: '#4F80E2' },
+    { label: 'This week', value: metrics?.totalQAs ?? 0, color: '#15CDCA' },
+    { label: 'Saved CVs', value: cvs.length, color: '#F59E0B' },
+  ]
+
+  const props = { onNewSession, onPastSessions, onMockInterview, onOnlineTest, onDock, user, onLogout, onCvsChange }
 
   return (
     <div className="dash-root" ref={rootRef}>
+      <header className="dash-header">
+        <div className="dash-header-text">
+          <h1 className="dash-header-title">Welcome, {firstName}</h1>
+          <p className="dash-header-sub">What would you like to work on today?</p>
+        </div>
+        <WindowControls onDock={onDock} />
+      </header>
 
-      {/* ── Window controls ── */}
-      <div className="dash-win-controls">
-        {/* Bell / notifications */}
-        <button type="button" className="dash-wc-btn dash-wc-bell" title="Notifications">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-          </svg>
-        </button>
-        {/* Snap */}
-        <div className="snap-btn-wrapper">
-          <button type="button" className="dash-wc-btn dash-wc-snap" title="Snap layout" onClick={() => setShowSnapGrid(!showSnapGrid)}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-            </svg>
-          </button>
-          {showSnapGrid && (
-            <div className="snap-grid-dropdown">
-              <div className="snap-grid-row">
-                <button type="button" className="snap-grid-cell" title="Top Left"    onClick={() => { window.electronAPI?.snapWindow('tl'); setShowSnapGrid(false) }} />
-                <button type="button" className="snap-grid-cell" title="Top Middle"  onClick={() => { window.electronAPI?.snapWindow('tm'); setShowSnapGrid(false) }} />
-                <button type="button" className="snap-grid-cell" title="Top Right"   onClick={() => { window.electronAPI?.snapWindow('tr'); setShowSnapGrid(false) }} />
+      <main className="dash-main">
+        <section className="dash-stats-section" aria-label="Overview">
+          <span className="dash-section-label">Overview</span>
+          <div className="dash-stats-grid">
+            {stats.map((stat) => (
+              <div key={stat.label} className="dash-stat-card">
+                <span className="dash-stat-dot" style={{ background: stat.color }} />
+                <div className="dash-stat-copy">
+                  <span className="dash-stat-value">{stat.value}</span>
+                  <span className="dash-stat-label">{stat.label}</span>
+                </div>
               </div>
-              <div className="snap-grid-row">
-                <button type="button" className="snap-grid-cell" title="Bottom Left"   onClick={() => { window.electronAPI?.snapWindow('bl'); setShowSnapGrid(false) }} />
-                <button type="button" className="snap-grid-cell" title="Bottom Middle" onClick={() => { window.electronAPI?.snapWindow('bm'); setShowSnapGrid(false) }} />
-                <button type="button" className="snap-grid-cell" title="Bottom Right"  onClick={() => { window.electronAPI?.snapWindow('br'); setShowSnapGrid(false) }} />
-              </div>
-            </div>
-          )}
-        </div>
-        {/* Dock */}
-        <button type="button" className="dash-wc-btn dash-wc-dock" title="Dock" onClick={onDock}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
-          </svg>
-        </button>
-        {/* Close */}
-        <button type="button" className="dash-wc-btn dash-wc-close" title="Close" onClick={() => window.electronAPI?.closeWindow()}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
-      </div>
-
-      {/* ── Hero ── */}
-      <div className="dash-hero">
-        <div className="dash-hero-title">Good morning, {firstName} 🌅</div>
-        <div className="dash-hero-sub">Ready for your next interview? Let's get started.</div>
-      </div>
-
-      {/* ── Metrics ── */}
-      <div className="dash-metrics-row">
-        <div className="dash-metric-card">
-          <div className="dash-metric-header">
-            <span className="dash-metric-cat">Sessions</span>
-            <span className="dash-metric-icon-badge" style={{ background: 'rgba(79,128,226,0.15)', color: '#4F80E2' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-              </svg>
-            </span>
+            ))}
           </div>
-          <div className="dash-metric-value">{metrics?.totalSessions ?? 0}</div>
-          <div className="dash-metric-desc">Total sessions</div>
-        </div>
-        <div className="dash-metric-card">
-          <div className="dash-metric-header">
-            <span className="dash-metric-cat">This Week</span>
-            <span className="dash-metric-icon-badge" style={{ background: 'rgba(21,205,202,0.15)', color: '#15CDCA' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
-              </svg>
-            </span>
-          </div>
-          <div className="dash-metric-value">{metrics?.totalQAs ?? 0}</div>
-          <div className="dash-metric-desc">Sessions this week</div>
-        </div>
-        <div className="dash-metric-card">
-          <div className="dash-metric-header">
-            <span className="dash-metric-cat">CVs Saved</span>
-            <span className="dash-metric-icon-badge" style={{ background: 'rgba(245,158,11,0.15)', color: '#F59E0B' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-              </svg>
-            </span>
-          </div>
-          <div className="dash-metric-value">{cvs.length}</div>
-          <div className="dash-metric-desc">Saved resumes</div>
-        </div>
-      </div>
+        </section>
 
-      {/* ── Start a Session ── */}
-      <div className="dash-section-title">Start a Session</div>
-      <div className="dash-session-cards">
-
-        {/* Real Interview */}
-        <div className="dash-sc">
-          <div className="dash-sc-icon" style={{ background: 'rgba(79,128,226,0.15)', border: '1px solid rgba(79,128,226,0.25)' }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4F80E2" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-            </svg>
-          </div>
-          <div className="dash-sc-title">Real Interview</div>
-          <div className="dash-sc-desc">For a real job application with job URL or description</div>
-          <button type="button" className="dash-sc-btn dash-sc-btn-outline" onClick={onNewSession}>+ New Session</button>
-        </div>
-
-        {/* Mock Interview */}
-        <div className="dash-sc">
-          <div className="dash-sc-icon" style={{ background: 'rgba(21,205,202,0.15)', border: '1px solid rgba(21,205,202,0.25)' }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#15CDCA" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-            </svg>
-          </div>
-          <div className="dash-sc-title">Mock Interview</div>
-          <div className="dash-sc-desc">Practice with a YouTube mock interviewer — AI coaches you live</div>
-          <button type="button" className="dash-sc-btn dash-sc-btn-green" onClick={onMockInterview}>▷ Start Mock</button>
-        </div>
-
-        {/* Online Test */}
-        <div className={`dash-sc${!user.is_premium ? ' dash-sc-locked' : ''}`}
-          title={!user.is_premium ? '🔒 Premium — upgrade to unlock' : undefined}>
-          <div className="dash-sc-icon" style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.25)' }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            </svg>
-          </div>
-          <div className="dash-sc-title">Online Test {!user.is_premium && <span style={{ fontSize: 12 }}>🔒</span>}</div>
-          <div className="dash-sc-desc">Solve coding challenges and assessments with real-time AI help</div>
-          <button type="button" className="dash-sc-btn dash-sc-btn-amber"
-            onClick={user.is_premium ? onOnlineTest : undefined}
-            disabled={!user.is_premium}>
-            {'<>'} Start Test
-          </button>
-        </div>
-
-      </div>
-
-      {/* ── Recent Sessions ── */}
-      {metrics && metrics.recentSessions.length > 0 && (
-        <>
-          <div className="dash-section-title dash-section-title-spaced">Recent Sessions</div>
-          <div className="dash-recent-list">
-            {metrics.recentSessions.map((s) => {
-              const type = getSessionType(s.company, s.target_role)
-              const dotColor = getTypeDotColor(type)
-              const duration = formatDuration(s.started_at, s.ended_at)
-              const date = formatDate(s.started_at)
+        <section className="dash-actions-section" aria-label="Start a session">
+          <div className="dash-actions-grid">
+            {SESSION_TYPES.map((s) => {
+              const locked = s.premium && !user.is_premium
+              const handler = s.onClick(props)
               return (
-                <div key={s.session_id} className="dash-recent-row">
-                  <span className="dash-recent-dot" style={{ background: dotColor }} />
-                  <div className="dash-recent-info">
-                    <div className="dash-recent-title">
-                      {s.company || 'Unknown'} — {s.target_role ? (s.target_role.length > 60 ? s.target_role.slice(0, 60) + '…' : s.target_role) : 'Interview'}
+                <div
+                  key={s.id}
+                  className={`dash-action-card${locked ? ' dash-action-locked' : ''}`}
+                  style={{ '--action-accent': s.color, '--action-bg': s.bg, '--action-border': s.border } as React.CSSProperties}
+                >
+                  <div className="dash-action-top">
+                    <span className="dash-action-icon" style={{ background: s.bg, borderColor: s.border, color: s.color }}>
+                      {s.icon}
+                    </span>
+                    <div className="dash-action-copy">
+                      <div className="dash-action-title">
+                        {s.title}
+                        {locked && <span className="dash-action-lock" aria-label="Premium feature">🔒</span>}
+                      </div>
+                      <p className="dash-action-desc">{s.desc}</p>
                     </div>
-                    <div className="dash-recent-sub">{type} · {duration} · {date}</div>
                   </div>
-                  <span className={`dash-recent-badge ${s.ended_at ? 'completed' : 'in-progress'}`}>
-                    {s.ended_at ? 'Completed' : 'In Progress'}
-                  </span>
+                  <button
+                    type="button"
+                    className={`dash-action-btn ${s.btnClass}`}
+                    onClick={locked ? undefined : handler}
+                    disabled={locked}
+                  >
+                    {s.label}
+                  </button>
                 </div>
               )
             })}
           </div>
-        </>
-      )}
+        </section>
 
-      {/* Hidden CV upload input — preserved for onCvsChange functionality */}
+        {showAdminSolved && <AdminSolvedManager />}
+
+        {hasRecent && (
+          <section className="dash-recent-section" aria-label="Recent sessions">
+            <div className="dash-recent-head">
+              <span className="dash-section-label">Recent sessions</span>
+              <button type="button" className="dash-view-all" onClick={onPastSessions}>
+                View all
+              </button>
+            </div>
+            <ul className="dash-recent-list">
+              {metrics!.recentSessions.map((s) => {
+                const type = getSessionType(s.company, s.target_role)
+                const accent = getTypeColor(type)
+                const role = s.target_role
+                  ? (s.target_role.length > 48 ? s.target_role.slice(0, 48) + '…' : s.target_role)
+                  : 'Interview'
+                return (
+                  <li key={s.session_id} className="dash-recent-row">
+                    <span className="dash-recent-accent" style={{ background: accent }} />
+                    <div className="dash-recent-info">
+                      <div className="dash-recent-title">{s.company || 'Unknown'} — {role}</div>
+                      <div className="dash-recent-sub">
+                        {type} · {formatDuration(s.started_at, s.ended_at)} · {formatDate(s.started_at)}
+                      </div>
+                    </div>
+                    <span className={`dash-recent-badge ${s.ended_at ? 'completed' : 'in-progress'}`}>
+                      {s.ended_at ? 'Done' : 'Active'}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        )}
+      </main>
+
       <input ref={cvFileInputRef} type="file" accept=".txt,.md,.pdf,.docx,.doc"
         title="Upload CV" aria-label="Upload CV file"
         className="dash-cv-file-input" onChange={handleCvUpload} />
 
-      <div className="dash-footer">
-        <span className="dash-footer-text">RETIAS — Real Time Interview Assistant Software</span>
+      <footer className="dash-footer">
+        <span className="dash-footer-text">RETIAS</span>
         <span className="dash-footer-version">v{__APP_VERSION__}</span>
-      </div>
+      </footer>
     </div>
   )
 }

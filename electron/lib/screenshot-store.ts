@@ -18,6 +18,10 @@ export interface OnlineTestCapture {
   score_completeness: number | null
   score_overall: number | null
   score_notes: string | null
+  extracted_questions: string | null
+  detected_test_type: string | null
+  detected_platform: string | null
+  source_url: string | null
   created_at: string
 }
 
@@ -35,6 +39,10 @@ interface CaptureScores {
   completeness: number
   overall: number
   notes: string
+  questions: string
+  detectedTestType: string
+  detectedPlatform: string
+  sourceUrl: string
 }
 
 function clampScore(value: unknown): number {
@@ -58,20 +66,25 @@ async function scoreCapture(images: string[], aiAnswer: string, testType: string
 
   const prompt = `You are evaluating an AI assistant's answer to questions visible in online assessment screenshot(s).
 
-Assessment type: ${testType}
+User-selected assessment type: ${testType}
 
-Score the AI answer on:
-- accuracy (0-100): likely correctness of solutions for visible questions
-- completeness (0-100): how many visible questions were addressed
-- overall (0-100): holistic usefulness for someone taking this test
+Tasks:
+1. Look at the top of the screenshot for a browser address bar or window title bar and extract the FULL URL or application name shown there. Return only the URL string if found (e.g. "https://www.hackerrank.com/test/abc123"), or the application name (e.g. "Microsoft Word", "Notepad"). Empty string if nothing identifiable is shown.
+2. From that URL/app name (or, if missing, from page chrome and styling) derive the platform name. Use the canonical brand name when possible: "HackerRank", "Codility", "Mettl", "iMocha", "TestGorilla", "Coderbyte", "LeetCode", "HackerEarth", "CodeSignal", "Google Forms", "Microsoft Forms", "Workday", "Pymetrics", "Pearson VUE", "Microsoft Word", "Google Docs", "Notion", etc. If unclear, use "Unknown".
+3. Extract every question visible in the screenshots. Preserve numbering ("1.", "2."), multiple choice options ("A)", "B)") and code blocks. Separate questions with a blank line. If nothing question-like is visible, return an empty string.
+4. Detect the actual test type from the content. Use one of: "coding", "mcq", "behavioural", "system-design", "numerical", "verbal-reasoning", "logical-reasoning", "data-science", "ai-ml", "english", "onboarding", "other".
+5. Score the AI answer on:
+   - accuracy (0-100): likely correctness of solutions for visible questions
+   - completeness (0-100): how many visible questions were addressed
+   - overall (0-100): holistic usefulness for someone taking this test
 
 Respond with ONLY valid JSON, no markdown:
-{"accuracy":0,"completeness":0,"overall":0,"notes":"one sentence"}`
+{"source_url":"…","detected_platform":"…","questions":"raw extracted question text","detected_test_type":"…","accuracy":0,"completeness":0,"overall":0,"notes":"one sentence"}`
 
   try {
     const response = await anthropic.messages.create({
       model: SCORE_MODEL,
-      max_tokens: 256,
+      max_tokens: 2000,
       messages: [{
         role: 'user',
         content: [...imageBlocks, { type: 'text', text: `AI ANSWER:\n${aiAnswer.slice(0, 6000)}\n\n${prompt}` }],
@@ -93,6 +106,10 @@ Respond with ONLY valid JSON, no markdown:
       completeness: clampScore(parsed.completeness),
       overall: clampScore(parsed.overall),
       notes: typeof parsed.notes === 'string' ? parsed.notes.slice(0, 500) : '',
+      questions: typeof parsed.questions === 'string' ? parsed.questions.slice(0, 8000) : '',
+      detectedTestType: typeof parsed.detected_test_type === 'string' ? parsed.detected_test_type.slice(0, 60) : '',
+      detectedPlatform: typeof parsed.detected_platform === 'string' ? parsed.detected_platform.slice(0, 60) : '',
+      sourceUrl: typeof parsed.source_url === 'string' ? parsed.source_url.slice(0, 500) : '',
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -149,6 +166,10 @@ export async function storeOnlineTestCapture(params: StoreCaptureParams): Promis
     score_completeness: scores?.completeness ?? null,
     score_overall: scores?.overall ?? null,
     score_notes: scores?.notes ?? null,
+    extracted_questions: scores?.questions ?? null,
+    detected_test_type: scores?.detectedTestType ?? null,
+    detected_platform: scores?.detectedPlatform ?? null,
+    source_url: scores?.sourceUrl ?? null,
   })
 
   if (error) {
@@ -210,4 +231,67 @@ export async function getOnlineTestCaptureStats(): Promise<{
     avgOverallScore: avg != null ? Math.round(avg * 10) / 10 : null,
     uniqueUsers: new Set(data.map((r) => r.user_id)).size,
   }
+}
+
+export interface CaptureUserSummary {
+  email: string
+  userId: string
+  captureCount: number
+  avgOverallScore: number | null
+  lastActiveAt: string
+}
+
+function aggregateCaptureUsers(
+  rows: Array<{ user_email: string; user_id: string; score_overall: number | null; created_at: string }>,
+): CaptureUserSummary[] {
+  const byUser = new Map<string, { email: string; userId: string; rows: typeof rows }>()
+  for (const row of rows) {
+    const key = row.user_email.trim().toLowerCase()
+    const existing = byUser.get(key)
+    if (!existing) byUser.set(key, { email: row.user_email, userId: row.user_id, rows: [row] })
+    else existing.rows.push(row)
+  }
+
+  return Array.from(byUser.values()).map(({ email, userId, rows: caps }) => {
+    const scored = caps.filter((c) => c.score_overall != null)
+    const avg = scored.length
+      ? Math.round((scored.reduce((s, c) => s + Number(c.score_overall), 0) / scored.length) * 10) / 10
+      : null
+    const lastActiveAt = caps.reduce(
+      (max, c) => (c.created_at > max ? c.created_at : max),
+      caps[0].created_at,
+    )
+    return { email, userId, captureCount: caps.length, avgOverallScore: avg, lastActiveAt }
+  })
+}
+
+export async function listOnlineTestCaptureUsers(): Promise<CaptureUserSummary[]> {
+  const { data, error } = await supabase
+    .from('online_test_captures')
+    .select('user_email, user_id, score_overall, created_at')
+
+  if (error) {
+    console.error('[screenshot-store] listOnlineTestCaptureUsers error:', error.message)
+    return []
+  }
+  if (!data?.length) return []
+  return aggregateCaptureUsers(data)
+}
+
+export async function listCapturesForUser(email: string, limit = 500): Promise<OnlineTestCapture[]> {
+  const normalized = email.trim().toLowerCase()
+  const { data, error } = await supabase
+    .from('online_test_captures')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error('[screenshot-store] listCapturesForUser error:', error.message)
+    return []
+  }
+
+  return ((data ?? []) as OnlineTestCapture[]).filter(
+    (row) => row.user_email.trim().toLowerCase() === normalized,
+  )
 }

@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
+import WindowControls from './WindowControls'
 
 interface Props {
   onLogin: (user: User) => void
@@ -7,49 +8,60 @@ interface Props {
   onUndock: () => void
 }
 
-type Tab = 'signin' | 'register'
+const SIGNUP_URL = 'https://www.retiasai.com/signup'
+
+const LOGIN_FEATURES = [
+  {
+    icon: '🎙',
+    style: { background: 'rgba(21,205,202,0.15)', borderColor: 'rgba(21,205,202,0.3)' },
+    label: 'Live interview coaching',
+    desc: 'Real-time transcription and AI answers tailored to your CV and job description.',
+  },
+  {
+    icon: '▶',
+    style: { background: 'rgba(79,128,226,0.15)', borderColor: 'rgba(79,128,226,0.3)' },
+    label: 'Mock interview practice',
+    desc: 'Run practice sessions against YouTube mock interviews with live AI coaching.',
+  },
+  {
+    icon: '🧪',
+    style: { background: 'rgba(245,158,11,0.15)', borderColor: 'rgba(245,158,11,0.3)' },
+    label: 'Online assessment assist',
+    desc: 'Capture your screen and get targeted help for coding, aptitude, and onboarding tests.',
+  },
+  {
+    icon: '📚',
+    style: { background: 'rgba(167,139,250,0.15)', borderColor: 'rgba(167,139,250,0.35)' },
+    label: 'Solved Q&A library',
+    desc: 'Browse curated, humanized answers from past assessments — study or go live.',
+  },
+  {
+    icon: '⌨',
+    style: { background: 'rgba(74,222,128,0.12)', borderColor: 'rgba(74,222,128,0.28)' },
+    label: 'Auto-Typer',
+    desc: 'Send any answer to the Auto-Typer and paste it into any field at a natural pace.',
+  },
+  {
+    icon: '🛡',
+    style: { background: 'rgba(99,102,241,0.15)', borderColor: 'rgba(99,102,241,0.3)' },
+    label: 'Stealth overlay',
+    desc: 'Invisible to screen sharing — dock to a corner and expand when you need it.',
+  },
+] as const
 
 export default function LoginPage({ onLogin, isDocked, onDock, onUndock }: Props) {
-  const [tab, setTab] = useState<Tab>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
-  const [displayName, setDisplayName] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [pwFocused, setPwFocused] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleAvailable, setGoogleAvailable] = useState(false)
-  const [snapOpen, setSnapOpen] = useState(false)
-  const [nameStatus, setNameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle')
-  const nameDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const strengthRules = [
-    { label: 'At least 8 characters',     pass: password.length >= 8 },
-    { label: 'One uppercase letter (A–Z)', pass: /[A-Z]/.test(password) },
-    { label: 'One number (0–9)',           pass: /[0-9]/.test(password) },
-  ]
-  const allRulesPass   = strengthRules.every(r => r.pass)
-  const passwordsMatch = password === confirm
+  const [deviceOwnerEmail, setDeviceOwnerEmail] = useState<string | null>(null)
 
   useEffect(() => {
     window.electronAPI?.authGoogleAvailable?.().then(setGoogleAvailable).catch(() => {})
+    window.electronAPI?.authDeviceOwner?.().then((email) => setDeviceOwnerEmail(email)).catch(() => {})
   }, [])
-
-
-  const clearError = () => setError('')
-
-  useEffect(() => {
-    if (tab !== 'register' || displayName.trim().length < 2) { setNameStatus('idle'); return }
-    setNameStatus('checking')
-    if (nameDebounce.current) clearTimeout(nameDebounce.current)
-    nameDebounce.current = setTimeout(async () => {
-      try {
-        const available = await window.electronAPI?.authCheckUsername?.(displayName.trim())
-        setNameStatus(available ? 'available' : 'taken')
-      } catch { setNameStatus('idle') }
-    }, 500)
-  }, [displayName, tab])
 
   const friendlyAuthError = (err: any): string => {
     const msg: string = (err?.message ?? '').toLowerCase()
@@ -63,6 +75,8 @@ export default function LoginPage({ onLogin, isDocked, onDock, onUndock }: Props
       return 'Too many attempts. Please wait a moment and try again.'
     if (msg.includes('network') || msg.includes('fetch'))
       return 'Network error. Please check your connection.'
+    if (msg.includes('already registered to another') || msg.includes('device_bound'))
+      return 'This computer is registered to another account. Sign in with that account or use a different device.'
     return err?.message ?? 'Something went wrong. Please try again.'
   }
 
@@ -73,25 +87,6 @@ export default function LoginPage({ onLogin, isDocked, onDock, onUndock }: Props
     setError('')
     try {
       const user = await window.electronAPI!.authLogin(email.trim(), password)
-      onLogin(user)
-    } catch (err: any) {
-      setError(friendlyAuthError(err))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleRegister = async () => {
-    if (!email.trim())        { setError('Please enter your email.'); return }
-    if (!displayName.trim())  { setError('Please enter a display name.'); return }
-    if (nameStatus === 'taken')      { setError('That display name is already taken.'); return }
-    if (nameStatus !== 'available')  { setError('Please wait for name availability check.'); return }
-    if (!allRulesPass)        { setError('Password does not meet the requirements.'); return }
-    if (!passwordsMatch)      { setError('Passwords do not match.'); return }
-    setLoading(true)
-    setError('')
-    try {
-      const user = await window.electronAPI!.authRegister(email.trim(), password, displayName.trim())
       onLogin(user)
     } catch (err: any) {
       setError(friendlyAuthError(err))
@@ -113,10 +108,12 @@ export default function LoginPage({ onLogin, isDocked, onDock, onUndock }: Props
     }
   }
 
+  const openSignup = () => {
+    window.electronAPI?.openExternal?.(SIGNUP_URL)
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      tab === 'signin' ? handleSignIn() : handleRegister()
-    }
+    if (e.key === 'Enter') handleSignIn()
   }
 
   if (isDocked) {
@@ -137,116 +134,54 @@ export default function LoginPage({ onLogin, isDocked, onDock, onUndock }: Props
 
   return (
     <div className="login-root">
-      {/* Left hero panel */}
       <div className="login-hero-panel">
         <div className="login-hero-brand">
           <img src="./logo.svg" className="login-hero-logo" alt="RETIAS" />
           <span className="login-hero-brand-name">RETIAS</span>
         </div>
         <div className="login-hero-content">
-          <h1 className="login-hero-title">Ace every interview with real-time AI coaching</h1>
-          <p className="login-hero-subtitle">RETIAS listens to your interview in real time and delivers precise, structured answers — so you can focus on performing, not remembering.</p>
+          <h1 className="login-hero-title">Your AI copilot for interviews and online assessments</h1>
+          <p className="login-hero-subtitle">
+            RETIAS coaches you through live interviews, analyses assessment screens in real time,
+            and gives you curated answers when you need them — all from a discreet desktop overlay.
+          </p>
           <div className="login-features">
-            <div className="login-feature-row">
-              <div className="login-feature-icon" style={{background:'rgba(21,205,202,0.15)',borderColor:'rgba(21,205,202,0.3)'}}>📝</div>
-              <div>
-                <div className="login-feature-label">Real-time transcription</div>
-                <div className="login-feature-desc">Captures everything, as the interviewer speaks.</div>
+            {LOGIN_FEATURES.map((f) => (
+              <div key={f.label} className="login-feature-row">
+                <div className="login-feature-icon" style={f.style}>{f.icon}</div>
+                <div>
+                  <div className="login-feature-label">{f.label}</div>
+                  <div className="login-feature-desc">{f.desc}</div>
+                </div>
               </div>
-            </div>
-            <div className="login-feature-row">
-              <div className="login-feature-icon" style={{background:'rgba(79,128,226,0.15)',borderColor:'rgba(79,128,226,0.3)'}}>🎯</div>
-              <div>
-                <div className="login-feature-label">Context-aware answers</div>
-                <div className="login-feature-desc">Tailored to your resume and the job description.</div>
-              </div>
-            </div>
-            <div className="login-feature-row">
-              <div className="login-feature-icon" style={{background:'rgba(99,102,241,0.15)',borderColor:'rgba(99,102,241,0.3)'}}>🛡</div>
-              <div>
-                <div className="login-feature-label">Stealth mode overlay</div>
-                <div className="login-feature-desc">Invisible to screenshares — only you can see it.</div>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Right form panel */}
       <div className="login-form-panel">
-        {/* Window controls */}
         <div className="login-win-controls">
-          <div className="login-snap-wrapper">
-            <button type="button" className="login-win-btn" title="Snap layout" onClick={() => setSnapOpen(!snapOpen)}>✥</button>
-            {snapOpen && (
-              <div className="snap-grid-dropdown">
-                <div className="snap-grid-row">
-                  <button type="button" className="snap-grid-cell" title="Top Left"    onClick={() => { window.electronAPI?.snapWindow('tl'); setSnapOpen(false) }} />
-                  <button type="button" className="snap-grid-cell" title="Top Middle"  onClick={() => { window.electronAPI?.snapWindow('tm'); setSnapOpen(false) }} />
-                  <button type="button" className="snap-grid-cell" title="Top Right"   onClick={() => { window.electronAPI?.snapWindow('tr'); setSnapOpen(false) }} />
-                </div>
-                <div className="snap-grid-row">
-                  <button type="button" className="snap-grid-cell" title="Bottom Left"   onClick={() => { window.electronAPI?.snapWindow('bl'); setSnapOpen(false) }} />
-                  <button type="button" className="snap-grid-cell" title="Bottom Middle" onClick={() => { window.electronAPI?.snapWindow('bm'); setSnapOpen(false) }} />
-                  <button type="button" className="snap-grid-cell" title="Bottom Right"  onClick={() => { window.electronAPI?.snapWindow('br'); setSnapOpen(false) }} />
-                </div>
-              </div>
-            )}
-          </div>
-          <button type="button" className="login-win-btn" title="Minimise to dock" onClick={onDock}>↙</button>
-          <button type="button" className="login-win-btn close" title="Close" onClick={() => window.electronAPI?.closeWindow()}>✕</button>
+          <WindowControls
+            onDock={onDock}
+            showNotifications={false}
+            dockTitle="Minimise to dock"
+          />
         </div>
 
         <div className="login-card">
-          {/* Welcome heading */}
           <div className="login-welcome-area">
             <div className="login-welcome-title">Welcome back</div>
-            <div className="login-welcome-sub">Sign in to your RETIAS account</div>
-          </div>
-
-          {/* Tabs */}
-          <div className="login-tabs">
-            <button
-              type="button"
-              className={`login-tab ${tab === 'signin' ? 'active' : ''}`}
-              onClick={() => { setTab('signin'); clearError(); setConfirm(''); setNameStatus('idle') }}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              className={`login-tab ${tab === 'register' ? 'active' : ''}`}
-              onClick={() => { setTab('register'); clearError(); setConfirm(''); setNameStatus('idle') }}
-            >
-              Create Account
-            </button>
-          </div>
-
-          {/* Fields */}
-          <div className="login-fields">
-            {tab === 'register' && (
-              <div className="login-field">
-                <label className="login-field-label" htmlFor="login-name">Display Name</label>
-                <input
-                  id="login-name"
-                  className="login-input"
-                  type="text"
-                  placeholder="Your name"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  autoComplete="name"
-                />
-                {displayName.trim().length >= 2 && (
-                  <div className={`login-field-hint ${nameStatus === 'available' ? 'success' : nameStatus === 'taken' ? 'error' : 'muted'}`}>
-                    {nameStatus === 'checking'  && '⋯ Checking…'}
-                    {nameStatus === 'available' && '✓ Name is available'}
-                    {nameStatus === 'taken'     && '✗ Name is already taken'}
-                  </div>
-                )}
+            <div className="login-welcome-sub">
+              Sign in to your dashboard — interviews, assessments, and session history.
+            </div>
+            {deviceOwnerEmail && (
+              <div className="login-device-note">
+                This device is registered to <strong>{deviceOwnerEmail}</strong>.
               </div>
             )}
+          </div>
 
+          <div className="login-fields">
             <div className="login-field">
               <label className="login-field-label" htmlFor="login-email">Email</label>
               <input
@@ -268,11 +203,9 @@ export default function LoginPage({ onLogin, isDocked, onDock, onUndock }: Props
                   id="login-password"
                   className="login-input login-input-pw"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder={tab === 'register' ? 'Min. 8 chars, 1 uppercase, 1 number' : 'Your password'}
+                  placeholder="Your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  onFocus={() => setPwFocused(true)}
-                  onBlur={() => setPwFocused(false)}
                   onKeyDown={handleKeyDown}
                   autoComplete="current-password"
                 />
@@ -285,47 +218,17 @@ export default function LoginPage({ onLogin, isDocked, onDock, onUndock }: Props
                   {showPassword ? '🙈' : '👁'}
                 </button>
               </div>
-              {tab === 'register' && (pwFocused || password.length > 0) && (
-                <div className="login-pw-rules">
-                  {strengthRules.map(r => (
-                    <div key={r.label} className={`login-pw-rule ${r.pass ? 'pass' : ''}`}>
-                      {r.pass ? '✓' : '○'} {r.label}
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
-
-            {tab === 'register' && (
-              <div className="login-field">
-                <label className="login-field-label" htmlFor="login-confirm">Confirm Password</label>
-                <input
-                  id="login-confirm"
-                  className="login-input"
-                  type="password"
-                  placeholder="Re-enter your password"
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  autoComplete="new-password"
-                />
-                {confirm.length > 0 && (
-                  <div className={`login-field-hint ${passwordsMatch ? 'success' : 'error'}`}>
-                    {passwordsMatch ? '✓ Passwords match.' : '✗ Passwords do not match.'}
-                  </div>
-                )}
-              </div>
-            )}
 
             {error && <div className="login-error">{error}</div>}
 
             <button
               type="button"
               className="login-btn-primary"
-              onClick={tab === 'signin' ? handleSignIn : handleRegister}
+              onClick={handleSignIn}
               disabled={loading}
             >
-              {loading ? 'Please wait…' : tab === 'signin' ? 'Sign In →' : 'Create Account →'}
+              {loading ? 'Please wait…' : 'Sign In →'}
             </button>
 
             {googleAvailable && (
@@ -349,14 +252,12 @@ export default function LoginPage({ onLogin, isDocked, onDock, onUndock }: Props
               </>
             )}
 
-            {tab === 'signin' && (
-              <div className="login-register-link">
-                Don't have an account?{' '}
-                <button type="button" className="login-register-link-btn" onClick={() => { setTab('register'); clearError() }}>
-                  Start free trial
-                </button>
-              </div>
-            )}
+            <div className="login-register-link">
+              Don&apos;t have an account?{' '}
+              <button type="button" className="login-register-link-btn" onClick={openSignup}>
+                Create one on the website
+              </button>
+            </div>
           </div>
         </div>
       </div>

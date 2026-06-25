@@ -1,78 +1,80 @@
+import { useState, type ComponentType, type CSSProperties } from 'react'
+import WindowControls from './WindowControls'
+import {
+  IconAiMl,
+  IconCoding,
+  IconNumerical,
+  IconOnboarding,
+  IconTechnical,
+  IconVerbal,
+  ONLINE_TEST_ACCENTS,
+  OnlineTestIconBadge,
+  OnlineTestPageHeader,
+  type OnlineTestAccent,
+} from './OnlineTestIcons'
+
 interface Props {
   onStart: (testType: string) => void
   onBack: () => void
   onDock: () => void
 }
 
-const TEST_TYPES = [
+const TEST_TYPES: {
+  id: string
+  label: string
+  desc: string
+  accent: OnlineTestAccent
+  Icon: ComponentType<{ size?: number }>
+}[] = [
   {
     id: 'english',
-    icon: '📝',
     label: 'English / Verbal',
     desc: 'Grammar, comprehension & verbal reasoning',
+    accent: ONLINE_TEST_ACCENTS.blue,
+    Icon: IconVerbal,
   },
   {
     id: 'coding',
-    icon: '💻',
     label: 'Coding Assessment',
     desc: 'LeetCode, HackerRank & coding challenges',
+    accent: ONLINE_TEST_ACCENTS.teal,
+    Icon: IconCoding,
   },
   {
     id: 'ai-ml',
-    icon: '🤖',
     label: 'AI / ML Test',
     desc: 'Machine learning, data science & statistics',
+    accent: ONLINE_TEST_ACCENTS.violet,
+    Icon: IconAiMl,
   },
   {
     id: 'numerical',
-    icon: '🔢',
     label: 'Numerical Reasoning',
     desc: 'Maths, aptitude & number series',
+    accent: ONLINE_TEST_ACCENTS.amber,
+    Icon: IconNumerical,
   },
   {
     id: 'technical',
-    icon: '⚙️',
     label: 'Technical Assessment',
     desc: 'Domain-specific technical questions',
+    accent: ONLINE_TEST_ACCENTS.slate,
+    Icon: IconTechnical,
   },
   {
     id: 'onboarding',
-    icon: '🏢',
     label: 'Onboarding / Compliance',
     desc: 'Company policy, H&S & e-learning modules',
+    accent: ONLINE_TEST_ACCENTS.teal,
+    Icon: IconOnboarding,
   },
-]
-
-const ROLE_TYPES = [
-  { id: 'role:Senior Software Engineer in Test',       icon: '🧪', label: 'Senior Software Engineer in Test',    desc: 'QA, automation & testing frameworks' },
-  { id: 'role:Automotive Engineer with Python',        icon: '🚗', label: 'Automotive Engineer with Python',     desc: 'Embedded systems, CAN bus & automotive' },
-  { id: 'role:Data Science (Python & SQL)',            icon: '📊', label: 'Data Science (Python & SQL)',         desc: 'Data wrangling, analysis & SQL queries' },
-  { id: 'role:Electrical Engineer with Python',        icon: '⚡', label: 'Electrical Engineer with Python',    desc: 'Circuits, signals & Python automation' },
-  { id: 'role:Energy Engineer with Python',            icon: '🔋', label: 'Energy Engineer with Python',        desc: 'Energy systems, modelling & simulation' },
-  { id: 'role:English Writer',                         icon: '✍️', label: 'English Writer',                     desc: 'Writing, editing & content creation' },
-  { id: 'role:Freelance Legal Consultant (US Law)',    icon: '⚖️', label: 'Freelance Legal Consultant (US Law)', desc: 'US law, contracts & legal advice' },
-  { id: 'role:Legal Consultant (US Law)',              icon: '🏛️', label: 'Legal Consultant (US Law)',          desc: 'US legal research & compliance' },
-  { id: 'role:Machine Learning Engineer (Python)',     icon: '🧠', label: 'Machine Learning Engineer (Python)',  desc: 'ML models, training & deployment' },
-  { id: 'role:Mathematics Expert with Python',         icon: '📐', label: 'Mathematics Expert with Python',     desc: 'Maths, proofs & numerical computing' },
-  { id: 'role:Mechanical Engineer with Python',        icon: '⚙️', label: 'Mechanical Engineer with Python',   desc: 'Mechanics, CAD & Python simulations' },
-  { id: 'role:Physics Expert with Python',             icon: '🔬', label: 'Physics Expert with Python',        desc: 'Physics problems & scientific computing' },
-  { id: 'role:Senior Consultant (McKinsey / BCG / Bain)', icon: '💼', label: 'Senior Consultant (McKinsey/BCG/Bain)', desc: 'Strategy, case studies & frameworks' },
-  { id: 'role:Senior Python Engineer',                 icon: '🐍', label: 'Senior Python Engineer',            desc: 'Python architecture, APIs & best practices' },
-  { id: 'role:Statistics Expert with Python',          icon: '📈', label: 'Statistics Expert with Python',     desc: 'Stats, probability & data analysis' },
-  { id: 'role:Vibe Coding Web Scraping Expert',        icon: '🕸️', label: 'Vibe Coding Web Scraping Expert',  desc: 'Web scraping, automation & crawling' },
-  { id: 'role:LLM Trainer - Agent Function Call',     icon: '🔧', label: 'LLM Trainer – Agent Function Call', desc: 'LLM training, RLHF, tool use & agent frameworks' },
-  { id: 'role:Data Scientist and Analyst',             icon: '🔍', label: 'Data Scientist / Analyst',          desc: 'EDA, visualisation, insights & business analytics' },
-  { id: 'role:Senior Software Engineer LLM Evaluation', icon: '📏', label: 'Senior SWE – LLM Evaluation',     desc: 'LLM benchmarking, eval frameworks & red-teaming' },
-  { id: 'role:Python and Full-Stack JS Developer',     icon: '🌐', label: 'Python + Full-Stack (JS) Developer', desc: 'Python backend, React/Node.js & REST APIs' },
 ]
 
 export default function OnlineTestSetup({ onStart, onBack, onDock }: Props) {
   const [selected, setSelected] = useState<string | null>(null)
-  const [showSnapGrid, setShowSnapGrid] = useState(false)
 
   return (
     <div className="setup-root online-test-root">
-      {/* Topbar */}
       <div className="setup-inner-topbar">
         <div className="setup-inner-topbar-left">
           <button type="button" className="setup-breadcrumb-btn" onClick={onBack}>
@@ -80,73 +82,38 @@ export default function OnlineTestSetup({ onStart, onBack, onDock }: Props) {
           </button>
         </div>
         <div className="setup-inner-topbar-right">
-          <div className="snap-btn-wrapper">
-            <button type="button" className="setup-window-btn" title="Snap layout" onClick={() => setShowSnapGrid(!showSnapGrid)}>✥</button>
-            {showSnapGrid && (
-              <div className="snap-grid-dropdown">
-                <div className="snap-grid-row">
-                  <button type="button" className="snap-grid-cell" title="Top Left"    onClick={() => { window.electronAPI?.snapWindow('tl'); setShowSnapGrid(false) }} />
-                  <button type="button" className="snap-grid-cell" title="Top Middle"  onClick={() => { window.electronAPI?.snapWindow('tm'); setShowSnapGrid(false) }} />
-                  <button type="button" className="snap-grid-cell" title="Top Right"   onClick={() => { window.electronAPI?.snapWindow('tr'); setShowSnapGrid(false) }} />
-                </div>
-                <div className="snap-grid-row">
-                  <button type="button" className="snap-grid-cell" title="Bottom Left"   onClick={() => { window.electronAPI?.snapWindow('bl'); setShowSnapGrid(false) }} />
-                  <button type="button" className="snap-grid-cell" title="Bottom Middle" onClick={() => { window.electronAPI?.snapWindow('bm'); setShowSnapGrid(false) }} />
-                  <button type="button" className="snap-grid-cell" title="Bottom Right"  onClick={() => { window.electronAPI?.snapWindow('br'); setShowSnapGrid(false) }} />
-                </div>
-              </div>
-            )}
-          </div>
-          <button type="button" className="setup-window-btn" title="Dock" onClick={onDock}>↙</button>
-          <button type="button" className="setup-window-btn close" title="Close" onClick={() => window.electronAPI?.closeWindow()}>✕</button>
+          <WindowControls onDock={onDock} />
         </div>
       </div>
 
-      {/* Header */}
-      <div className="online-test-header">
-        <div className="online-test-title">🧪 Online Test & Onboarding</div>
-        <div className="online-test-subtitle">
-          Select the type of assessment you're taking. The AI will analyse your screen and provide targeted answers.
-        </div>
-      </div>
+      <OnlineTestPageHeader
+        title="Online Assessment & Onboarding"
+        subtitle="Select the type of assessment you're taking. The AI will analyse your screen and provide targeted answers."
+      />
 
       <div className="online-test-body">
-        {/* Assessment types */}
         <div className="online-test-section-label">Assessment Types</div>
         <div className="online-test-grid">
-          {TEST_TYPES.map((t) => (
+          {TEST_TYPES.map(({ id, label, desc, accent, Icon }) => (
             <button
-              key={t.id}
+              key={id}
               type="button"
-              className={`online-test-card${selected === t.id ? ' selected' : ''}`}
-              onClick={() => setSelected(t.id)}
+              className={`online-test-card${selected === id ? ' selected' : ''}`}
+              style={{ '--ot-accent': accent.color, '--ot-accent-bg': accent.bg, '--ot-accent-border': accent.border } as CSSProperties}
+              onClick={() => setSelected(id)}
             >
-              <span className="online-test-card-icon">{t.icon}</span>
-              <span className="online-test-card-label">{t.label}</span>
-              <span className="online-test-card-desc">{t.desc}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Role-based types */}
-        <div className="online-test-section-label">Role-Based Expert</div>
-        <div className="online-test-grid">
-          {ROLE_TYPES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={`online-test-card${selected === t.id ? ' selected' : ''}`}
-              onClick={() => setSelected(t.id)}
-            >
-              <span className="online-test-card-icon">{t.icon}</span>
-              <span className="online-test-card-label">{t.label}</span>
-              <span className="online-test-card-desc">{t.desc}</span>
+              <div className="online-test-card-top">
+                <OnlineTestIconBadge accent={accent}>
+                  <Icon size={18} />
+                </OnlineTestIconBadge>
+                <span className="online-test-card-label">{label}</span>
+              </div>
+              <span className="online-test-card-desc">{desc}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Footer */}
       <div className="setup-footer">
         <button type="button" className="setup-btn secondary" onClick={onBack}>
           ← Back
@@ -163,6 +130,3 @@ export default function OnlineTestSetup({ onStart, onBack, onDock }: Props) {
     </div>
   )
 }
-
-// React import needed for JSX
-import { useState } from 'react'

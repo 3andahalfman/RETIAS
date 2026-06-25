@@ -70,6 +70,7 @@ interface User {
   google_id: string | null
   created_at: number
   is_premium: boolean
+  is_premium_plus: boolean
 }
 
 interface CV {
@@ -100,6 +101,14 @@ interface AdminCaptureStats {
   totalCaptures: number
   avgOverallScore: number | null
   uniqueUsers: number
+}
+
+interface AdminCaptureUserSummary {
+  email: string
+  userId: string
+  captureCount: number
+  avgOverallScore: number | null
+  lastActiveAt: string
 }
 
 interface ElectronAPI {
@@ -135,6 +144,9 @@ interface ElectronAPI {
   resizeWindow: (width: number, height: number, animated?: boolean) => void
   snapWindow: (position: 'tl' | 'tm' | 'tr' | 'bl' | 'bm' | 'br') => void
   setIgnoreMouseEvents: (ignore: boolean) => void
+  setWindowOpacity?: (opacity: number) => void
+  setAlwaysOnTop?: (value: boolean) => void
+  setStealthMode?: (enabled: boolean) => void
 
   // Past sessions
   getPastSessions: () => Promise<PastSession[]>
@@ -164,10 +176,17 @@ interface ElectronAPI {
   authRegister: (email: string, password: string, displayName: string) => Promise<User>
   authLogin: (email: string, password: string) => Promise<User>
   authGoogleAvailable?: () => Promise<boolean>
+  authDeviceOwner?: () => Promise<string | null>
   authGoogle: () => Promise<User>
   authRestore: (userId: string) => Promise<User | null>
   authLogout: () => void
   authRefresh?: () => Promise<User | null>
+  authGetSession?: () => Promise<{ access_token: string; refresh_token: string } | null>
+
+  // Paraphrase / humanise solved-assessment answers
+  paraphraseGenerateVariants?: (answer: string) => Promise<string[]>
+  paraphrasePersonalize?: (payload: { questionId: string; variants: string[]; fallbackAnswer: string }) => Promise<string | null>
+  paraphraseSelection?: (payload: { text: string; mode: 'paraphrase' | 'humanize' | 'humanize-strong' }) => Promise<string | null>
   authCheckUsername?: (displayName: string) => Promise<boolean>
   updateDisplayName?: (displayName: string) => Promise<void>
 
@@ -202,7 +221,58 @@ interface ElectronAPI {
     captures: AdminOnlineTestCapture[]
     stats: AdminCaptureStats
   }>
+  adminScreenshotLibraryOverview: () => Promise<{
+    stats: AdminCaptureStats
+    users: AdminCaptureUserSummary[]
+  }>
+  adminListCapturesForUser: (email: string) => Promise<AdminOnlineTestCapture[]>
   adminGetScreenshotUrl: (path: string) => Promise<string | null>
+  adminUpsertSolvedQuestions?: (rows: Array<{
+    platform: string
+    assessment_type: string
+    question: string
+    answer: string
+    answer_variants?: string[]
+    paraphrase_enabled: boolean
+    source_capture_id: string | null
+    source_url: string | null
+  }>) => Promise<{ total: number; inserted: number; updated: number }>
+  listSolvedQuestions?: () => Promise<Array<{
+    id: string
+    platform: string
+    assessment_type: string
+    question: string
+    answer: string
+    answer_variants: string[] | null
+    paraphrase_enabled?: boolean
+    source_url: string | null
+    created_at: string
+  }>>
+  deleteSolvedQuestions?: (ids: string[]) => Promise<number>
+  deleteSolvedAssessment?: (payload: { platform: string; assessment_type: string }) => Promise<number>
+
+  // Auto-Typer
+  autoTypeStart?: (opts: {
+    text: string
+    wpm: number
+    jitterPct: number
+    countdownMs: number
+    typoRate?: number
+  }) => Promise<{ ok: boolean }>
+  autoTypePause?: () => void
+  autoTypeResume?: () => void
+  autoTypeStop?: () => void
+  autoTypeUpdatePace?: (opts: { wpm?: number; jitterPct?: number; typoRate?: number }) => void
+  onAutoTypeStatus?: (cb: (status: AutoTypeStatus) => void) => void
+  onAutoTypeCountdown?: (cb: (payload: { secondsLeft: number; totalSeconds: number }) => void) => void
+}
+
+interface AutoTypeStatus {
+  state: 'idle' | 'countdown' | 'typing' | 'paused' | 'done' | 'error'
+  charsTyped: number
+  totalChars: number
+  remainingMs: number
+  error?: string
 }
 
 declare global {

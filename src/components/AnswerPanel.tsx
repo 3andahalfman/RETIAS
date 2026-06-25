@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -6,6 +6,7 @@ import rehypeKatex from 'rehype-katex'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import 'katex/dist/katex.min.css'
+import { AutoTypeHeaderButton, AutoTypeStatusStrip } from './InlineAutoTyper'
 
 interface AnswerEntry {
   question: string
@@ -105,6 +106,13 @@ export default function AnswerPanel({ isPremium = false, isOnlineTest = false, i
 
   const current = currentIdx >= 0 ? answers[currentIdx] : null
 
+  // Capture the latest answer at click-time (not render-time) so the
+  // Auto-Typer always grabs whatever's currently on screen, including text
+  // that may have streamed in between renders.
+  const currentRef = useRef<AnswerEntry | null>(null)
+  useEffect(() => { currentRef.current = current }, [current])
+  const getCurrentAnswer = useCallback(() => currentRef.current?.answer ?? null, [])
+
   const handleCopy = () => {
     if (current?.answer) window.electronAPI?.copyAnswer(current.answer)
   }
@@ -160,77 +168,121 @@ export default function AnswerPanel({ isPremium = false, isOnlineTest = false, i
     finally { setAnalysing(false) }
   }
 
+  const answerQuickTools = (
+    <>
+      <button type="button" className="panel-action-btn" onClick={handleFontDecrease} title="Decrease text size" disabled={fontSizeIdx === 0}>A-</button>
+      <button type="button" className="panel-action-btn" onClick={handleFontIncrease} title="Increase text size" disabled={fontSizeIdx === FONT_SIZES.length - 1}>A+</button>
+      <span className="panel-action-divider" />
+      <button type="button" className="panel-action-btn copy-btn" onClick={handleCopyWithToast} title="Copy answer" disabled={!current?.answer}>
+        {copied ? <span className="copy-toast">✓ Copied!</span> : '📋'}
+      </button>
+      <button type="button" className="panel-action-btn" onClick={handleRefresh} title="Regenerate last answer" disabled={!canRefresh}>↺</button>
+      <button type="button" className="panel-action-btn" onClick={handleDelete} title="Delete answer" disabled={!current}>🗑</button>
+    </>
+  )
+
+  const autoTypeTool = (
+    <AutoTypeHeaderButton
+      getText={getCurrentAnswer}
+      disabled={!current?.answer || current.generating}
+      title={current?.generating ? 'Waiting for answer to finish generating…' : 'Auto-type this answer into the focused window'}
+    />
+  )
+
+  const answerTools = (
+    <>
+      {answerQuickTools}
+      {autoTypeTool}
+    </>
+  )
+
+  const screenTools = isOnlineTest ? (
+    <>
+      <button
+        type="button"
+        className="panel-capture-btn"
+        onClick={onCapture}
+        disabled={captureQueue.length >= 5}
+        title={captureQueue.length >= 5 ? 'Max 5 screenshots' : 'Capture screenshot'}
+      >
+        📸{captureQueue.length > 0 ? ` ${captureQueue.length}` : ' Capture'}
+      </button>
+      {captureQueue.length > 0 && (
+        <button type="button" className="panel-action-btn" onClick={onClearCaptures} title="Clear captures">✕</button>
+      )}
+      <button
+        type="button"
+        className="panel-analyse-btn"
+        onClick={onAnalyseAll}
+        disabled={captureQueue.length === 0}
+        title="Send all screenshots to AI"
+      >
+        Analyse All →
+      </button>
+    </>
+  ) : (
+    <button
+      type="button"
+      className={`panel-analyse-btn${analysing ? ' loading' : ''}${!isPremium ? ' locked' : ''}`}
+      onClick={handleAnalyseScreen}
+      disabled={analysing || !isPremium || !isStarted}
+      title={!isStarted ? 'Click Start first' : isPremium ? 'Analyse Screen' : '🔒 Premium feature'}
+    >
+      {!isPremium && '🔒 '}{analysing ? '⏳' : '🖥 Analyse Screen'}
+    </button>
+  )
+
   return (
     <div className="answer-panel" data-font-size={fontSizeIdx}>
-      {/* Panel header — tab bar */}
-      <div className="panel-header-row">
-        <div className="panel-tabs">
-          <span className="panel-tab active">AI Answer</span>
-          <span className="panel-tab-sep" />
-          <div className="panel-nav-arrows">
-            <button type="button" className="panel-nav-btn" onClick={handlePrev} disabled={currentIdx <= 0} title="Previous answer">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6"/>
-              </svg>
-            </button>
-            <span className="panel-nav-count">{answers.length > 0 ? `${currentIdx + 1} / ${answers.length}` : '—'}</span>
-            <button type="button" className="panel-nav-btn" onClick={handleNext} disabled={currentIdx >= answers.length - 1} title="Next answer">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="9 18 15 12 9 6"/>
-              </svg>
-            </button>
-          </div>
-          {hasNewerAnswer && (
-            <button type="button" className="panel-tab new-answer-hint" onClick={() => setCurrentIdx(answers.length - 1)} title="Jump to latest">↓ Latest</button>
-          )}
-        </div>
-        <div className="panel-header-right">
-          {isOnlineTest ? (
-            <div className="panel-capture-ui">
-              <button
-                type="button"
-                className="panel-capture-btn"
-                onClick={onCapture}
-                disabled={captureQueue.length >= 5}
-                title={captureQueue.length >= 5 ? 'Max 5 screenshots' : 'Capture screenshot'}
-              >
-                📸{captureQueue.length > 0 ? ` ${captureQueue.length}` : ' Capture'}
+      <div className={`panel-header${isOnlineTest ? ' panel-header--stacked' : ''}`}>
+        <div className="panel-header-row panel-header-row--primary">
+          <div className="panel-tabs">
+            <span className="panel-tab active">AI Answer</span>
+            <span className="panel-tab-sep" />
+            <div className="panel-nav-arrows">
+              <button type="button" className="panel-nav-btn" onClick={handlePrev} disabled={currentIdx <= 0} title="Previous answer">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6"/>
+                </svg>
               </button>
-              {captureQueue.length > 0 && (
-                <button type="button" className="panel-action-btn" onClick={onClearCaptures} title="Clear captures">✕</button>
-              )}
-              <button
-                type="button"
-                className="panel-analyse-btn"
-                onClick={onAnalyseAll}
-                disabled={captureQueue.length === 0}
-                title="Send all screenshots to AI"
-              >
-                Analyse All →
+              <span className="panel-nav-count">{answers.length > 0 ? `${currentIdx + 1} / ${answers.length}` : '—'}</span>
+              <button type="button" className="panel-nav-btn" onClick={handleNext} disabled={currentIdx >= answers.length - 1} title="Next answer">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
               </button>
             </div>
+            {hasNewerAnswer && (
+              <button type="button" className="panel-tab new-answer-hint" onClick={() => setCurrentIdx(answers.length - 1)} title="Jump to latest">↓ Latest</button>
+            )}
+          </div>
+
+          {isOnlineTest ? (
+            <div className="panel-header-right">
+              {answerQuickTools}
+            </div>
           ) : (
-            <button
-              type="button"
-              className={`panel-analyse-btn${analysing ? ' loading' : ''}${!isPremium ? ' locked' : ''}`}
-              onClick={handleAnalyseScreen}
-              disabled={analysing || !isPremium || !isStarted}
-              title={!isStarted ? 'Click Start first' : isPremium ? 'Analyse Screen' : '🔒 Premium feature'}
-            >
-              {!isPremium && '🔒 '}{analysing ? '⏳' : '🖥 Analyse Screen'}
-            </button>
+            <div className="panel-header-right">
+              {screenTools}
+              <span className="panel-action-divider" />
+              {answerTools}
+            </div>
           )}
-          <span className="panel-action-divider" />
-          <button type="button" className="panel-action-btn" onClick={handleFontDecrease} title="Decrease text size" disabled={fontSizeIdx === 0}>A-</button>
-          <button type="button" className="panel-action-btn" onClick={handleFontIncrease} title="Increase text size" disabled={fontSizeIdx === FONT_SIZES.length - 1}>A+</button>
-          <span className="panel-action-divider" />
-          <button type="button" className="panel-action-btn copy-btn" onClick={handleCopyWithToast} title="Copy answer" disabled={!current?.answer}>
-            {copied ? <span className="copy-toast">✓ Copied!</span> : '📋'}
-          </button>
-          <button type="button" className="panel-action-btn" onClick={handleRefresh} title="Regenerate last answer" disabled={!canRefresh}>↺</button>
-          <button type="button" className="panel-action-btn" onClick={handleDelete} title="Delete answer" disabled={!current}>🗑</button>
         </div>
+
+        {isOnlineTest && (
+          <div className="panel-header-row panel-header-row--tools">
+            <div className="panel-tool-group panel-tool-group--screen">
+              {screenTools}
+            </div>
+            <div className="panel-tool-group panel-tool-group--answer">
+              {autoTypeTool}
+            </div>
+          </div>
+        )}
       </div>
+
+      <AutoTypeStatusStrip dense />
 
       <div className="answer-content" ref={scrollRef}>
         {!current ? (
