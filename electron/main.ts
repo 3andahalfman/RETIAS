@@ -348,6 +348,10 @@ async function bootstrap() {
   // means the renderer doesn't get blocked on a multi-minute invoke.
   const MAX_AUTOTYPE_LEN = 100_000
   ipcMain.handle('autotype:start', async (_e, opts: unknown) => {
+    const { isAdminEmail } = await import('./lib/admin.js')
+    if (!currentUserIsPremiumPlus && !isAdminEmail(currentUserEmail)) {
+      throw new Error('Auto-Typer is a Premium Plus feature. Upgrade your account to use it.')
+    }
     if (!opts || typeof opts !== 'object') throw new Error('Invalid auto-type options')
     const { text, wpm, jitterPct, countdownMs, typoRate } = opts as Record<string, unknown>
     if (typeof text !== 'string' || !text.trim()) throw new Error('Auto-type text cannot be empty')
@@ -456,7 +460,7 @@ async function bootstrap() {
 
   ipcMain.handle('auth:device-owner', async () => {
     const { getRegisteredDeviceEmail } = await import('./lib/device-binding.js')
-    return getRegisteredDeviceEmail()
+    return await getRegisteredDeviceEmail()
   })
 
   ipcMain.handle('auth:google', async () => {

@@ -8,6 +8,7 @@ import AudioCapture from './AudioCapture'
 import ManualPromptBar from './ManualPromptBar'
 import { loadSettings } from './Settings'
 import { AutoTypeHeaderButton, AutoTypeStatusStrip } from './InlineAutoTyper'
+import { hasPremiumPlusAccess } from '../lib/premium-access'
 import WindowControls from './WindowControls'
 import {
   IconAssessmentDoc,
@@ -89,6 +90,7 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
   const [isDocked, setIsDocked] = useState(false)
   const panelsRef = useRef<HTMLDivElement>(null)
   const aiModel = loadSettings().aiModel
+  const canAutoType = hasPremiumPlusAccess(user)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -325,6 +327,7 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
                   onCapture={handleCapture}
                   onAnalyseAll={handleAnalyseAll}
                   onClearCaptures={() => setCaptureQueue([])}
+                  canAutoType={canAutoType}
                 />
               </>
             ) : (
@@ -384,7 +387,12 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
                       <AutoTypeHeaderButton
                         getText={getSolvedAnswer}
                         disabled={!displayAnswer}
-                        title="Auto-type this answer into the focused window"
+                        locked={!canAutoType}
+                        title={
+                          !canAutoType
+                            ? 'Premium Plus — upgrade to unlock Auto-Typer'
+                            : 'Auto-type this answer into the focused window'
+                        }
                       />
                       <span className="panel-disabled-hint">Live capture available after Start</span>
                     </div>

@@ -50,6 +50,8 @@ interface AutoTypeHeaderButtonProps {
   title?: string
   /** Optional compact mode — icon only, no text. */
   compact?: boolean
+  /** Premium Plus gate — renders a disabled locked button. */
+  locked?: boolean
 }
 
 /**
@@ -58,12 +60,12 @@ interface AutoTypeHeaderButtonProps {
  * markdown-stripped value of `getText()`. While a session is in flight the
  * button hides itself so the status strip below can take over.
  */
-export function AutoTypeHeaderButton({ getText, disabled, title, compact }: AutoTypeHeaderButtonProps) {
+export function AutoTypeHeaderButton({ getText, disabled, title, compact, locked }: AutoTypeHeaderButtonProps) {
   const { status } = useAutoTypeStatus()
   const active = isActiveState(status.state)
 
   const handleClick = useCallback(() => {
-    if (active) return
+    if (active || locked) return
     const raw = getText()
     if (!raw) return
     const text = stripMarkdown(raw)
@@ -76,9 +78,22 @@ export function AutoTypeHeaderButton({ getText, disabled, title, compact }: Auto
       countdownMs: s.autoTyperCountdownMs,
       typoRate: s.autoTyperTypoRate ?? 0,
     }).catch(() => {})
-  }, [active, getText])
+  }, [active, getText, locked])
 
   if (active) return null
+
+  if (locked) {
+    return (
+      <button
+        type="button"
+        className="panel-action-btn autotype-header-btn locked"
+        disabled
+        title={title ?? 'Premium Plus — upgrade to unlock Auto-Typer'}
+      >
+        {compact ? '🔒' : '🔒 Auto-Type'}
+      </button>
+    )
+  }
 
   return (
     <button

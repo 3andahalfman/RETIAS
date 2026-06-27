@@ -40,12 +40,12 @@ CREATE POLICY "Users insert own online test captures"
 -- Admin dashboard — read all captures
 CREATE POLICY "Admin reads all online test captures"
   ON online_test_captures FOR SELECT
-  USING ((auth.jwt() ->> 'email') = 'admin@retias.com');
+  USING ((auth.jwt() ->> 'email') = 'juliaodaramola@gmail.com');
 
 -- Admin dashboard — delete captures (single or by session)
 CREATE POLICY "Admin deletes online test captures"
   ON online_test_captures FOR DELETE
-  USING ((auth.jwt() ->> 'email') = 'admin@retias.com');
+  USING ((auth.jwt() ->> 'email') = 'juliaodaramola@gmail.com');
 
 CREATE INDEX IF NOT EXISTS idx_online_test_captures_created
   ON online_test_captures (created_at DESC);
@@ -81,7 +81,7 @@ CREATE POLICY "Admin reads online test screenshots"
   USING (
     bucket_id = 'online-test-screenshots'
     AND (
-      (auth.jwt() ->> 'email') = 'admin@retias.com'
+      (auth.jwt() ->> 'email') = 'juliaodaramola@gmail.com'
       OR auth.uid()::text = (storage.foldername(name))[1]
     )
   );
@@ -91,5 +91,5 @@ CREATE POLICY "Admin deletes online test screenshots"
   ON storage.objects FOR DELETE
   USING (
     bucket_id = 'online-test-screenshots'
-    AND (auth.jwt() ->> 'email') = 'admin@retias.com'
+    AND (auth.jwt() ->> 'email') = 'juliaodaramola@gmail.com'
   );

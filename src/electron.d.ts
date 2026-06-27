@@ -216,7 +216,7 @@ interface ElectronAPI {
   listCvs: () => Promise<CV[]>
   deleteCv: (cvId: string) => Promise<void>
 
-  // Admin — online test screenshot library (admin@retias.com only)
+  // Admin — online test screenshot library (juliaodaramola@gmail.com only)
   adminListScreenshots: (offset?: number, limit?: number) => Promise<{
     captures: AdminOnlineTestCapture[]
     stats: AdminCaptureStats

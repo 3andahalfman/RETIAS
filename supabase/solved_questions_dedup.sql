@@ -15,5 +15,5 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_solved_questions_dedup
 DROP POLICY IF EXISTS "Admin updates solved questions" ON solved_questions;
 CREATE POLICY "Admin updates solved questions"
   ON solved_questions FOR UPDATE
-  USING ((auth.jwt() ->> 'email') = 'admin@retias.com')
-  WITH CHECK ((auth.jwt() ->> 'email') = 'admin@retias.com');
+  USING ((auth.jwt() ->> 'email') = 'juliaodaramola@gmail.com')
+  WITH CHECK ((auth.jwt() ->> 'email') = 'juliaodaramola@gmail.com');

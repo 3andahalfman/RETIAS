@@ -26,9 +26,10 @@ interface Props {
   onCapture?: () => void
   onAnalyseAll?: () => void
   onClearCaptures?: () => void
+  canAutoType?: boolean
 }
 
-export default function AnswerPanel({ isPremium = false, isOnlineTest = false, isStarted = false, captureQueue = [], onCapture, onAnalyseAll, onClearCaptures }: Props) {
+export default function AnswerPanel({ isPremium = false, isOnlineTest = false, isStarted = false, captureQueue = [], onCapture, onAnalyseAll, onClearCaptures, canAutoType = false }: Props) {
   const [answers, setAnswers] = useState<AnswerEntry[]>([])
   const [currentIdx, setCurrentIdx] = useState(-1)
   const [analysing, setAnalysing] = useState(false)
@@ -185,7 +186,14 @@ export default function AnswerPanel({ isPremium = false, isOnlineTest = false, i
     <AutoTypeHeaderButton
       getText={getCurrentAnswer}
       disabled={!current?.answer || current.generating}
-      title={current?.generating ? 'Waiting for answer to finish generating…' : 'Auto-type this answer into the focused window'}
+      locked={!canAutoType}
+      title={
+        !canAutoType
+          ? 'Premium Plus — upgrade to unlock Auto-Typer'
+          : current?.generating
+            ? 'Waiting for answer to finish generating…'
+            : 'Auto-type this answer into the focused window'
+      }
     />
   )
 

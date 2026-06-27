@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { isAdminEmail } from '../lib/admin'
+import { hasPremiumPlusAccess } from '../lib/premium-access'
 
 export type SidebarItemId =
   | 'dashboard'
@@ -29,6 +30,7 @@ interface NavItem {
   icon: string
   accent?: string
   premium?: boolean
+  premiumPlus?: boolean
 }
 
 interface NavSection {
@@ -55,7 +57,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { id: 'sessions', label: 'Past Sessions', icon: '⏱' },
       { id: 'cv-manager', label: 'CV Manager', icon: '📄' },
-      { id: 'auto-typer', label: 'Auto-Typer', icon: '⌨' },
+      { id: 'auto-typer', label: 'Auto-Typer', icon: '⌨', premiumPlus: true },
     ],
   },
   {
@@ -101,9 +103,20 @@ export default function Sidebar({ activeItem, user, onNavigate, onLogout, onUpgr
 
   const profileTitle = `${user.display_name || user.email}${user.email ? `\n${user.email}` : ''}`
 
+  const isNavItemLocked = (item: NavItem) => {
+    if (item.premiumPlus) return !hasPremiumPlusAccess(user)
+    if (item.premium) return !user.is_premium
+    return false
+  }
+
+  const lockedNavTitle = (item: NavItem) => {
+    if (item.premiumPlus) return `${item.label} — Premium Plus feature`
+    if (item.premium) return `${item.label} — Premium feature`
+    return item.label
+  }
+
   const handleNavClick = (item: NavItem) => {
-    const locked = item.premium && !user.is_premium
-    if (locked) {
+    if (isNavItemLocked(item)) {
       onUpgrade?.()
       return
     }
@@ -131,13 +144,13 @@ export default function Sidebar({ activeItem, user, onNavigate, onLogout, onUpgr
           <div key={section.label} className="sidebar-nav-section">
             <div className="sidebar-section-label">{section.label}</div>
             {section.items.map((item) => {
-              const locked = item.premium && !user.is_premium
+              const locked = isNavItemLocked(item)
               return (
                 <button
                   key={item.id}
                   type="button"
                   className={`sidebar-nav-item${activeItem === item.id ? ' active' : ''}${locked ? ' locked' : ''}`}
-                  title={locked ? `${item.label} — Premium feature` : item.label}
+                  title={locked ? lockedNavTitle(item) : item.label}
                   onClick={() => handleNavClick(item)}
                 >
                   <span

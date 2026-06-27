@@ -30,6 +30,16 @@ function readLocalBinding(): LocalBinding | null {
   }
 }
 
+function clearLocalBinding(): void {
+  const filePath = getBindingPath()
+  if (!filePath || !fs.existsSync(filePath)) return
+  try {
+    fs.unlinkSync(filePath)
+  } catch {
+    // ignore
+  }
+}
+
 function writeLocalBinding(binding: LocalBinding): void {
   const filePath = getBindingPath()
   if (!filePath) return
@@ -83,9 +93,27 @@ export async function assertDesktopDeviceAllowed(): Promise<void> {
   })
 }
 
-export function getRegisteredDeviceEmail(): string | null {
-  const local = readLocalBinding()
+/** Email shown on the login screen — Supabase is source of truth; local cache is fallback only. */
+export async function getRegisteredDeviceEmail(): Promise<string | null> {
   const deviceId = getDeviceId()
-  if (!local || local.deviceId !== deviceId) return null
-  return local.userEmail || null
+
+  const { data: serverEmail, error } = await supabase.rpc('get_desktop_device_owner', {
+    p_device_id: deviceId,
+  })
+
+  if (!error) {
+    const email = typeof serverEmail === 'string' && serverEmail.trim() ? serverEmail.trim() : null
+    if (!email) {
+      clearLocalBinding()
+      return null
+    }
+    return email
+  }
+
+  // Offline fallback — still honour local cache for the same device id
+  const local = readLocalBinding()
+  if (local?.deviceId === deviceId && local.userEmail) {
+    return local.userEmail
+  }
+  return null
 }

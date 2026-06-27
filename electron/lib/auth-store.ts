@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { assertDesktopDeviceAllowed } from './device-binding.js'
+import { isAdminEmail } from './admin.js'
 
 export interface User {
   id: string
@@ -19,6 +20,7 @@ function mapUser(u: SupabaseUser, profileDisplayName?: string | null): User {
     u.user_metadata?.full_name ||
     ''
   const emailLocal = u.email?.split('@')[0] ?? ''
+  const admin = isAdminEmail(u.email)
   return {
     id: u.id,
     email: u.email ?? '',
@@ -27,8 +29,8 @@ function mapUser(u: SupabaseUser, profileDisplayName?: string | null): User {
       ? (googleIdentity.identity_data?.sub ?? null)
       : null,
     created_at: new Date(u.created_at).getTime(),
-    is_premium: u.app_metadata?.is_premium === true || u.app_metadata?.is_premium_plus === true,
-    is_premium_plus: u.app_metadata?.is_premium_plus === true,
+    is_premium: admin || u.app_metadata?.is_premium === true || u.app_metadata?.is_premium_plus === true,
+    is_premium_plus: admin || u.app_metadata?.is_premium_plus === true,
   }
 }
 

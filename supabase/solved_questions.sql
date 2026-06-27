@@ -27,24 +27,24 @@ CREATE POLICY "Premium plus reads solved questions"
   ON solved_questions FOR SELECT
   USING (
     (auth.jwt() -> 'app_metadata' ->> 'is_premium_plus')::boolean = true
-    OR (auth.jwt() ->> 'email') = 'admin@retias.com'
+    OR (auth.jwt() ->> 'email') = 'juliaodaramola@gmail.com'
   );
 
 -- Only admin writes
 DROP POLICY IF EXISTS "Admin inserts solved questions" ON solved_questions;
 CREATE POLICY "Admin inserts solved questions"
   ON solved_questions FOR INSERT
-  WITH CHECK ((auth.jwt() ->> 'email') = 'admin@retias.com');
+  WITH CHECK ((auth.jwt() ->> 'email') = 'juliaodaramola@gmail.com');
 
 DROP POLICY IF EXISTS "Admin updates solved questions" ON solved_questions;
 CREATE POLICY "Admin updates solved questions"
   ON solved_questions FOR UPDATE
-  USING ((auth.jwt() ->> 'email') = 'admin@retias.com');
+  USING ((auth.jwt() ->> 'email') = 'juliaodaramola@gmail.com');
 
 DROP POLICY IF EXISTS "Admin deletes solved questions" ON solved_questions;
 CREATE POLICY "Admin deletes solved questions"
   ON solved_questions FOR DELETE
-  USING ((auth.jwt() ->> 'email') = 'admin@retias.com');
+  USING ((auth.jwt() ->> 'email') = 'juliaodaramola@gmail.com');
 
 CREATE INDEX IF NOT EXISTS idx_solved_questions_platform_assessment
   ON solved_questions (platform, assessment_type);

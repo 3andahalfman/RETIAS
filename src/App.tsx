@@ -19,6 +19,7 @@ import ManualPromptBar from './components/ManualPromptBar'
 import CvManager from './components/CvManager'
 import Settings, { loadSettings } from './components/Settings'
 import { isAdminEmail } from './lib/admin'
+import { hasPremiumPlusAccess } from './lib/premium-access'
 import { invalidateSupabaseSessionSync } from './lib/supabase'
 import PricingPage from './components/PricingPage'
 import AdminScreenshotDashboard from './components/AdminScreenshotDashboard'
@@ -442,6 +443,8 @@ export default function App() {
           <div className="page-main">
             <AutoTyper
               onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
+              locked={!hasPremiumPlusAccess(user)}
+              onUpgrade={() => setView('pricing')}
             />
           </div>
         </div>
@@ -546,6 +549,7 @@ export default function App() {
             onCapture={handleCapture}
             onAnalyseAll={handleAnalyseAll}
             onClearCaptures={() => setCaptureQueue([])}
+            canAutoType={user ? hasPremiumPlusAccess(user) : false}
           />
         </div>
 

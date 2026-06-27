@@ -34,7 +34,7 @@ CREATE POLICY "Users and admin read cached answers"
   ON solved_answer_user_cache FOR SELECT
   USING (
     auth.uid() = user_id
-    OR (auth.jwt() ->> 'email') = 'admin@retias.com'
+    OR (auth.jwt() ->> 'email') = 'juliaodaramola@gmail.com'
   );
 
 -- A user can insert their own row (desktop main process writes on user's behalf)

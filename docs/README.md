@@ -61,3 +61,4 @@ This folder is the **source of truth** for the RETIAS Windows desktop app. Read 
 3. Update *Layout & sections*, *Features*, *Copy*, *Data sources/IPC* — whichever moved.
 4. If you added a new IPC channel: register it in [`_conventions.md`](./_conventions.md).
 5. If you added a new view: also register in [`_architecture.md`](./_architecture.md) state-machine list and in `App.tsx` view-type union.
+6. **If the feature should appear on the website:** add a row to [`RETIAS-Web/docs/FEATURE_REGISTRY.md`](../RETIAS-Web/docs/FEATURE_REGISTRY.md) and update landing/pricing when ready.

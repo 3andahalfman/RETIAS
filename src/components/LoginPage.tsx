@@ -39,7 +39,7 @@ const LOGIN_FEATURES = [
     icon: '⌨',
     style: { background: 'rgba(74,222,128,0.12)', borderColor: 'rgba(74,222,128,0.28)' },
     label: 'Auto-Typer',
-    desc: 'Send any answer to the Auto-Typer and paste it into any field at a natural pace.',
+    desc: 'Premium Plus — type any answer into a field at a natural human pace.',
   },
   {
     icon: '🛡',

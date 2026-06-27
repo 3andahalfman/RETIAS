@@ -10,7 +10,7 @@ Cross-cutting rules every doc inherits.
 | **Signed-in** | `App.tsx` short-circuit returns `<LoginPage>` if `user === null` |
 | **Premium** | `user.is_premium` checked at the Dashboard card AND at session-start IPC AND inside the LLMWorker |
 | **Premium Plus** | `user.is_premium_plus` checked in `OnlineTestEntry` and inside `SolvedTestPage`'s RLS reads |
-| **Admin** | `isAdminEmail(user.email)` — `'admin@retias.com'` only. Used by Sidebar nav, `AdminScreenshotDashboard`, paraphrase login IPC. |
+| **Admin** | `isAdminEmail(user.email)` — `juliaodaramola@gmail.com` only. Used by Sidebar nav, `AdminScreenshotDashboard`, paraphrase login IPC. |
 
 `User` is mapped in `electron/lib/auth-store.ts:mapUser`. `is_premium` is `true` if **either** `is_premium` **or** `is_premium_plus` is set in `app_metadata` — Premium Plus implies Premium.
 

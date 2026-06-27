@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { isAdminEmail } from '../lib/admin'
+import { hasPremiumPlusAccess } from '../lib/premium-access'
 import DockIcon from './DockIcon'
 
 interface Props {
@@ -422,6 +423,20 @@ export default function Settings({ user, onLogout, onUserUpdate, onUpgrade }: Pr
           <div className="settings-section">
             <div className="settings-section-title">Auto-Typer</div>
 
+            {!hasPremiumPlusAccess(user) && (
+              <div className="settings-group">
+                <div className="settings-hint">
+                  Auto-Typer is a Premium Plus feature. Upgrade to unlock typing from AI answers and the dedicated Auto-Typer tab.
+                </div>
+                {onUpgrade && (
+                  <button type="button" className="settings-btn-secondary" onClick={onUpgrade}>
+                    Upgrade to Premium Plus
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className={!hasPremiumPlusAccess(user) ? 'settings-section-locked' : undefined}>
             <div className="settings-group">
               <label className="settings-label">Default Speed — {settings.autoTyperWpm} WPM</label>
               <input
@@ -431,6 +446,7 @@ export default function Settings({ user, onLogout, onUserUpdate, onUpgrade }: Pr
                 max={300}
                 step={5}
                 value={settings.autoTyperWpm}
+                disabled={!hasPremiumPlusAccess(user)}
                 onChange={e => update('autoTyperWpm', Number(e.target.value))}
               />
               <div className="settings-hint">Used as the starting speed when you open the Auto-Typer tab.</div>
@@ -445,6 +461,7 @@ export default function Settings({ user, onLogout, onUserUpdate, onUpgrade }: Pr
                 max={70}
                 step={5}
                 value={Math.round(settings.autoTyperJitterPct * 100)}
+                disabled={!hasPremiumPlusAccess(user)}
                 onChange={e => update('autoTyperJitterPct', Number(e.target.value) / 100)}
               />
               <div className="settings-hint">Randomises per-keystroke delays. Higher values look more human but take longer.</div>
@@ -459,6 +476,7 @@ export default function Settings({ user, onLogout, onUserUpdate, onUpgrade }: Pr
                 max={30}
                 step={1}
                 value={Math.round(settings.autoTyperTypoRate * 100)}
+                disabled={!hasPremiumPlusAccess(user)}
                 onChange={e => update('autoTyperTypoRate', Number(e.target.value) / 100)}
               />
               <div className="settings-hint">
@@ -474,6 +492,7 @@ export default function Settings({ user, onLogout, onUserUpdate, onUpgrade }: Pr
                     key={ms}
                     type="button"
                     className={`settings-chip${settings.autoTyperCountdownMs === ms ? ' active' : ''}`}
+                    disabled={!hasPremiumPlusAccess(user)}
                     onClick={() => update('autoTyperCountdownMs', ms)}
                   >
                     {ms / 1000}s
@@ -487,6 +506,7 @@ export default function Settings({ user, onLogout, onUserUpdate, onUpgrade }: Pr
               <div className="settings-hint">
                 Global hotkeys during typing: <strong>Alt + T</strong> pause/resume · <strong>Alt + Shift + T</strong> stop.
               </div>
+            </div>
             </div>
           </div>
         )}

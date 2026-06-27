@@ -6,6 +6,8 @@ import { useAutoTypeStatus, AutoTypeEngineState } from '../lib/auto-type-status'
 
 interface Props {
   onDock: () => void
+  locked?: boolean
+  onUpgrade?: () => void
 }
 
 type EngineState = AutoTypeEngineState
@@ -33,7 +35,7 @@ function stateLabel(state: EngineState): string {
   }
 }
 
-export default function AutoTyper({ onDock }: Props) {
+export default function AutoTyper({ onDock, locked, onUpgrade }: Props) {
   const initial = useMemo(() => loadSettings(), [])
 
   const [text, setText] = useState<string>('')
@@ -125,6 +127,35 @@ export default function AutoTyper({ onDock }: Props) {
     }
     return 'Paste or type text above, then click Start.'
   }, [engineState, secondsLeft, countdownSec, charsTyped, totalChars, remainingMs, errorMsg, charCount, wpm])
+
+  if (locked) {
+    return (
+      <div className="auto-typer-page">
+        <div className="setup-inner-topbar">
+          <div className="setup-inner-topbar-left">
+            <div className="auto-typer-title">⌨ Auto-Typer</div>
+          </div>
+          <div className="setup-inner-topbar-right">
+            <WindowControls onDock={onDock} />
+          </div>
+        </div>
+        <div className="auto-typer-locked-body">
+          <div className="auto-typer-locked-card">
+            <span className="auto-typer-locked-icon" aria-hidden>🔒</span>
+            <h2 className="auto-typer-locked-title">Premium Plus feature</h2>
+            <p className="auto-typer-locked-desc">
+              Auto-Typer types answers into any field at a natural human pace — including inline from AI Answer panels.
+            </p>
+            {onUpgrade && (
+              <button type="button" className="auto-typer-start-btn" onClick={onUpgrade}>
+                Upgrade to Premium Plus
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="auto-typer-page">
