@@ -634,6 +634,8 @@ async function bootstrap() {
     if (typeof path !== 'string' || path.includes('..') || !/^[\w-]+\/[\w-]+\/\d+\.png$/.test(path)) {
       throw new Error('Invalid path')
     }
+    const { supabase } = await import('./lib/supabase.js')
+    await supabase.auth.refreshSession().catch(() => {})
     const { getScreenshotSignedUrl } = await import('./lib/screenshot-store.js')
     return getScreenshotSignedUrl(path)
   })

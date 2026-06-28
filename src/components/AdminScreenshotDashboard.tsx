@@ -128,6 +128,7 @@ async function fetchCapturesForUser(email: string): Promise<OnlineTestCapture[]>
     return window.electronAPI.adminListCapturesForUser(email)
   }
 
+  await syncSupabaseSession()
   const normalized = email.trim().toLowerCase()
   const { data, error } = await supabase
     .from('online_test_captures')
@@ -196,10 +197,11 @@ async function fetchScreenshotUrl(path: string): Promise<string | null> {
   if (!SCREENSHOT_PATH_REGEX.test(path)) return null
 
   if (isElectron && window.electronAPI?.adminGetScreenshotUrl) {
-    return window.electronAPI.adminGetScreenshotUrl(path) ?? null
+    const ipcUrl = await window.electronAPI.adminGetScreenshotUrl(path).catch(() => null)
+    if (ipcUrl) return ipcUrl
   }
 
-  await syncSupabaseSession()
+  await syncSupabaseSession(true)
   const { data, error } = await supabase.storage
     .from(STORAGE_BUCKET)
     .createSignedUrl(path, 3600)
