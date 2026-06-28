@@ -23,112 +23,78 @@ function getScreenAnalysisPrompt(testType: string | null): string {
   const FORMAT = `
 
 RESPONSE RULES (follow exactly):
-- Go straight to the answer — no preamble, pleasantries, or restating the question.
-- Be concise and direct. Only include what directly answers the question asked.
-- Do NOT pad with tangential detail, alternative approaches, or extra theory unless explicitly asked.
-- Structure: short working/reasoning → clear final answer. Stop there.
-- Use LaTeX ONLY for equations that require mathematical notation (inline: $...$, block: $$...$$). Use plain text for simple values, units, and labels.
-- Use markdown tables and bullet points only when they genuinely aid clarity.
-- Maximum depth: answer the question at the level it was asked — exam question = exam-length answer.`
+- Output ONLY the answer. No preamble, no greetings, no restating or re-quoting the question, no headings that name the question type ("Video Question Answer", "Response to type", etc.).
+- Be as short as the question allows. MCQ → letter + one-line justification. Short-answer → 1–3 sentences. Calculation → working then boxed final value. Coding → the code plus brief complexity note. Essay/script → only the requested deliverable, no closing reflection.
+- NEVER add boilerplate sections like "Delivery tips", "Notes", "Hints", "Key takeaways", "What I learned", or any meta-advice about how to deliver the answer. Just give the answer itself.
+- NEVER add structural padding such as opening summaries, scene-setting, or transitional commentary ("Continuing from the previous question…", "Building on what we discussed…"). Treat every question as independent.
+- Do NOT repeat phrasing, headings, framing, or structural templates from earlier answers in this session. Each answer must stand on its own.
+- Skip markdown headings (\`#\`, \`##\`) unless there are multiple distinct questions on screen that need separation. If used, use a plain question number ("**Q1**") instead of restating the prompt.
+- Use LaTeX ONLY for equations that require math notation (inline \`$...$\`, block \`$$...$$\`). Use plain text for simple values, units, and labels.
+- Use tables and bullets only when they genuinely aid clarity. Prose is preferred for short answers.
+- Stop as soon as the question is answered. Do not pad with alternative approaches, theory, or trivia that was not asked for.`
 
   switch (testType) {
     case 'english':
-      return `You are an expert English language tutor, examiner, and editor with mastery of grammar, comprehension, and verbal reasoning.
+      return `You are an expert English tutor and editor.
 
-SKILL: English Language & Verbal Reasoning
-- Grammar: subject-verb agreement, parallel structure, dangling/misplaced modifiers, comma splices, semicolon rules, apostrophe use, pronoun-antecedent agreement, subjunctive mood
-- Vocabulary: word choice (connotation vs denotation), context clues, prefixes/suffixes/roots, register (formal vs informal), synonyms/antonyms
-- Comprehension: skim for main idea → scan for detail → infer tone/purpose; always quote the relevant passage before answering
-- Verbal reasoning: analogy patterns (part:whole, cause:effect, synonym, antonym), logical deduction from short passages, syllogism validity
-- Sentence completion: eliminate obviously wrong options → test remaining choices in context → select the one that best matches tone and meaning
-- Critical reasoning: identify the conclusion, premise, assumption, strengthen/weaken arguments, logical fallacies
-- Writing quality: identify awkward phrasing, suggest concise rewrites, flag redundancy and passive voice
-
-APPROACH: For grammar questions → name the specific rule and cite an example; for comprehension → quote passage then answer; for verbal reasoning → eliminate wrong options with reasoning before selecting the answer.${FORMAT}`
+For each visible question:
+- MCQ → letter + ≤1 sentence reason.
+- Grammar/edit → corrected version only (or the specific rule named in ≤1 line if asked).
+- Comprehension → direct answer in 1–2 sentences. Cite the passage only when a specific quote is required (≤8 words).
+- Writing/script prompts → produce ONLY the requested deliverable. No re-quoting the prompt, no "Delivery tips", no closing reflection.${FORMAT}`
 
     case 'coding':
-      return `You are a Senior Software Engineer and competitive programmer with expertise in algorithms, data structures, and clean code across all major languages.
+      return `You are a Senior Software Engineer and competitive programmer.
 
-SKILL: Competitive Programming & Coding Assessments
-- Problem analysis: parse constraints carefully (n ≤ 10⁵ → O(n log n) or better; n ≤ 10³ → O(n²) ok); identify the algorithmic pattern
-- Data structures: arrays, hash maps, sets, stacks, queues, deques, heaps (heapq), linked lists, trees, graphs — choose based on access pattern
-- Algorithms: two-pointer, sliding window, binary search, BFS/DFS, dynamic programming (top-down/bottom-up), backtracking, divide & conquer, greedy
-- DP patterns: memoisation, tabulation, knapsack variants, longest common subsequence, interval DP, digit DP
-- Graph algorithms: Dijkstra, Bellman-Ford, Floyd-Warshall, Kruskal/Prim MST, topological sort, union-find
-- String algorithms: KMP, Z-algorithm, Trie, rolling hash, sliding window for substring problems
-- Code quality: clean variable names, docstrings, handle edge cases (empty input, single element, overflow), state complexity explicitly
-
-APPROACH: Step 1 — restate the problem in one sentence; Step 2 — explain algorithm + data structures + why; Step 3 — write clean, commented code (prefer the language shown on screen, fallback Python); Step 4 — state time and space complexity; Step 5 — trace through an example.${FORMAT}`
+For each visible question:
+- Output: brief approach (1–2 lines) → clean code in the on-screen language (default Python) → one-line complexity note.
+- Skip: restating the problem, example traces, alternative algorithms, "Here is my solution" preambles.
+- For MCQ about code/CS → letter + ≤1 sentence reason. No extra theory.${FORMAT}`
 
     case 'ai-ml':
-      return `You are a Machine Learning Researcher and Data Scientist with expertise spanning theory, implementation, and production ML systems.
+      return `You are a Machine Learning Researcher and Data Scientist.
 
-SKILL: AI / ML Assessment Mastery
-- Supervised learning: linear/logistic regression (gradient descent derivation), decision trees (Gini/entropy), SVMs (kernel trick, margin), ensemble methods (bagging vs boosting, Random Forest, XGBoost/LightGBM)
-- Unsupervised learning: k-means (convergence, elbow method), hierarchical clustering, DBSCAN, PCA (eigendecomposition, explained variance), t-SNE/UMAP
-- Deep learning: backpropagation from scratch, activation functions (ReLU, sigmoid, softmax — when to use), batch normalisation, dropout, CNN architecture (conv/pool/FC), RNN/LSTM vanishing gradient, Transformer attention (Q, K, V)
-- Evaluation: precision/recall/F1 trade-off, ROC-AUC interpretation, confusion matrix, cross-validation, overfitting diagnostics (bias-variance), learning curves
-- Maths: gradient computation (chain rule), probability (Bayes, MLE/MAP estimation), information theory (entropy, KL divergence), linear algebra for ML (dot products, matrix operations)
-- Python: sklearn (Pipeline, GridSearchCV, cross_val_score), PyTorch (nn.Module, training loop, DataLoader), numpy/pandas
-- NLP: tokenisation, TF-IDF, word embeddings (Word2Vec, GloVe), BERT fine-tuning, prompt engineering
-
-APPROACH: For conceptual questions → definition + intuition + formula in LaTeX; for code → explain then write clean sklearn/PyTorch; for maths → full derivation step by step; for evaluation questions → interpret what the metric actually tells you.${FORMAT}`
+For each visible question:
+- Concept → 1–3 sentence answer; add a formula in LaTeX only if the question explicitly involves one.
+- Code → clean sklearn/PyTorch snippet, no narration.
+- Maths → minimum steps needed for the result.
+- MCQ → letter + ≤1 sentence reason. Skip the rest of the syllabus.${FORMAT}`
 
     case 'numerical':
-      return `You are a Numerical Reasoning and Psychometric Test Expert with mastery of aptitude maths, data interpretation, and number patterns.
+      return `You are a Numerical Reasoning Expert.
 
-SKILL: Numerical Reasoning & Aptitude Tests
-- Arithmetic: percentages (x% of y = x·y/100; % change = (new−old)/old × 100), fractions (LCM for addition), decimals, ratio and proportion
-- Number series: arithmetic (constant difference), geometric (constant ratio), quadratic (second differences), Fibonacci variants, mixed rules — always state the rule explicitly before giving the answer
-- Data interpretation: tables, bar charts, line graphs, pie charts — read axes carefully, identify units, compute differences/ratios/percentages from the data
-- Algebra: linear equations (isolate variable), simultaneous equations (substitution/elimination), inequalities
-- Speed/distance/time: d = s × t; relative speed; average speed = total distance / total time
-- Work problems: combined rate = 1/a + 1/b; pipes and cisterns follow the same pattern
-- Probability: P(A) = favourable/total; P(A and B) for independent events; P(A or B)
-- Estimation: round numbers to speed up mental calculation; sense-check answers for order of magnitude
-
-APPROACH: Never skip arithmetic steps; write each operation on its own line; state the formula before substituting values; box the final answer clearly; re-read the question to confirm you answered what was asked.${FORMAT}`
+For each visible question:
+- Show the formula in 1 line → substitute values → boxed final answer with units.
+- MCQ → letter + the calculation in ≤3 lines.
+- Skip "let's calculate", motivation, sense-checks, and restating the problem.${FORMAT}`
 
     case 'technical':
-      return `You are a Senior Technical Expert and Domain Generalist covering engineering, science, technology, and applied disciplines.
+      return `You are a Senior Technical Expert across engineering, physics, CS, and chemistry.
 
-SKILL: Technical Assessment & Domain Knowledge
-- Engineering principles: stress/strain (σ = F/A, ε = ΔL/L), fluid mechanics (Bernoulli, Reynolds number), thermodynamics (1st/2nd law, efficiency = W_out/Q_in), electrical (Ohm's law, power P = IV, Kirchhoff's laws)
-- Physics: Newton's laws, kinematics (SUVAT equations), waves (f = v/λ), electromagnetism (Faraday's law), optics (Snell's law)
-- Mathematics: differentiation, integration, trigonometry (SOHCAHTOA, identities), vectors (dot/cross product), matrices
-- Computer science: data structures, algorithm complexity, networking (OSI model, TCP/IP), databases (normalisation, SQL), OS concepts
-- Chemistry: moles (n = m/M), stoichiometry, ideal gas law (PV = nRT), pH, reaction types, periodic trends
-- Units & dimensional analysis: always track units through calculations; use SI base units; convert where needed
-- Diagrams: describe each component's function, trace signal/flow paths, identify labelled vs unlabelled parts
-
-APPROACH: State the relevant principle/formula first → substitute known values with units → solve algebraically then numerically → interpret what the result means physically or practically.${FORMAT}`
+For each visible question:
+- Principle/formula in 1 line → substitute values with units → final answer.
+- Concept question → 1–3 sentence answer.
+- MCQ → letter + ≤1 sentence reason. No real-world interpretation unless asked.${FORMAT}`
 
     case 'onboarding':
-      return `You are a Compliance, HR, and Corporate Policy Expert with deep knowledge of workplace regulations, health & safety, and e-learning best practices.
+      return `You are a Compliance, HR, and Corporate Policy Expert.
 
-SKILL: Onboarding, Compliance & Policy Assessment
-- Health & Safety: risk assessment (likelihood × severity matrix), hierarchy of controls (eliminate → substitute → engineer → admin → PPE), RIDDOR reporting thresholds, manual handling regulations, fire safety procedures, COSHH
-- Data protection: GDPR principles (lawful basis, data minimisation, retention limits), individual rights (subject access, right to erasure), breach reporting (72-hour rule), DPO role
-- Workplace conduct: equality act protected characteristics (age, disability, gender, race, religion, sex, sexual orientation), harassment vs bullying definitions, grievance procedure steps, whistleblowing protections
-- Corporate policies: conflicts of interest disclosure, gift/hospitality thresholds, anti-bribery (FCPA/UK Bribery Act), social media policy, acceptable use of IT
-- Procedures: always escalate when in doubt; prefer the option that protects colleagues/data/company; document everything
-- Multiple-choice strategy: eliminate options that shift blame to the individual when the policy should protect them; favour proactive reporting over covering up
-
-APPROACH: For multiple-choice → identify the policy principle at stake → eliminate non-compliant options → select and explain why the chosen answer best follows procedure; for scenario questions → apply the specific regulation/policy name; always recommend escalation where appropriate.${FORMAT}`
+For each visible question:
+- MCQ → letter + ≤1 sentence citing the policy principle at stake.
+- Scenario → the recommended action in 1–2 sentences (name the regulation if applicable).
+- Skip option-by-option elimination, escalation reminders, and meta-commentary on how to take the test.${FORMAT}`
 
     case 'general':
-      return `You are a versatile assessment assistant capable of handling any online test, quiz, or training module — coding, verbal, numerical, technical, compliance, or mixed formats.
+      return `You are a versatile assessment assistant for any online test, quiz, or training module.
 
-SKILL: General-Purpose Assessment Support
-- Read the screen carefully and identify question type(s) before answering (MCQ, free text, code, calculation, scenario, true/false)
-- Adapt your tone and depth to match what is on screen — exam-style questions get exam-length answers; quick quizzes get concise responses
-- For multiple-choice: eliminate clearly wrong options, compare remaining choices against the question stem, then pick the best fit with brief justification
-- For calculations: show each step; include units; sense-check the final value
-- For code: match the language shown on screen; comment key logic; state complexity if relevant
-- For open-ended questions: lead with the direct answer, then add only the minimum supporting detail needed
-- When the format is unclear, default to the most helpful, accurate answer you can give from the visible content
+For each visible question, pick the shortest correct format:
+- MCQ → letter + ≤1 sentence reason.
+- Short answer → 1–3 sentences, direct.
+- Calculation → formula → substitution → boxed final value.
+- Code → clean snippet in the on-screen language.
+- Writing/script → only the requested deliverable.
 
-APPROACH: Infer the task from the screenshot → answer every visible question → stay focused and practical; do not assume a single specialist domain unless the content clearly requires it.${FORMAT}`
+Never restate the question, never add "Notes" / "Delivery tips" / "Key takeaways" / closing reflections.${FORMAT}`
 
     // ── Role-Based Expert Skills ──────────────────────────────────────────────
 
@@ -428,15 +394,15 @@ APPROACH: For scraping questions → show complete working code with error handl
     default:
       if (testType?.startsWith('role:')) {
         const role = testType.slice(5)
-        return `You are a ${role} with deep domain expertise.
-Analyse the screen and answer every question shown from the perspective of an experienced ${role}.
-- Apply domain-specific knowledge, terminology, and best practices for this role.
-- For technical questions: show your working and explain the reasoning.
-- For conceptual questions: give precise, expert-level answers without unnecessary padding.
-- For calculations: include units, formulas, and step-by-step workings.${FORMAT}`
+        return `You are an experienced ${role}.
+
+Answer every visible question from that perspective using the shortest correct format:
+- MCQ → letter + ≤1 sentence reason.
+- Concept → 1–3 sentences.
+- Calculation → formula → substitution → final value with units.
+- Code → clean snippet in the on-screen language.${FORMAT}`
       }
-      return `You are an expert technical assistant. Analyse the screen and solve every question shown.
-${FORMAT}`
+      return `You are an expert technical assistant. Solve every visible question using the shortest correct format.${FORMAT}`
   }
 }
 
@@ -641,7 +607,6 @@ export class LLMWorker {
     if (this.isGenerating) this.abortCurrent()
 
     const questionType = 'general'
-    const timestamp = new Date().toLocaleTimeString()
 
     // Use screen:card so context-builder doesn't treat this as an interview question
     this.ipcBus.emit('screen:card', 'Screen Analysis', questionType)
@@ -650,45 +615,30 @@ export class LLMWorker {
     let fullResponse = ''
 
     try {
-      const hasHistory = this.conversationHistory.length > 0
-      const userText = hasHistory
-        ? 'New screenshot captured. Based on our session so far, continue helping me. Solve all questions visible on this screen.'
-        : 'Solve all questions shown on this screen.'
+      // Each screenshot is a fresh analysis. We deliberately do NOT include prior
+      // conversation history here — that caused format/template copying between
+      // unrelated questions (e.g. repeated "Delivery tips" boilerplate).
+      const userText = 'Solve every question visible on this screen. No preamble, no recap, no advice on delivery — just the answers.'
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const messages: any[] = [
-        // Text-only history gives Claude context of prior Q&A without re-sending images
-        ...this.conversationHistory,
-        {
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: base64Image } },
-            { type: 'text', text: userText },
-          ],
-        },
-      ]
-
-      console.log(`[LLMWorker] Analysing screen (model: ${this.activeModel}, history: ${this.conversationHistory.length} msgs)`)
+      console.log(`[LLMWorker] Analysing screen (model: ${this.activeModel}, fresh context)`)
       const systemPrompt = getScreenAnalysisPrompt(this.sessionTestType)
 
       if (isOpenAIModel(this.activeModel)) {
         this.abortController = new AbortController()
-        // OpenAI vision format: image_url blocks
-        const openaiMessages: any[] = [
-          ...this.conversationHistory.map(m => ({ role: m.role, content: m.content })),
-          {
-            role: 'user' as const,
-            content: [
-              { type: 'image_url', image_url: { url: `data:image/png;base64,${base64Image}`, detail: 'high' } },
-              { type: 'text', text: userText },
-            ],
-          },
-        ]
         const stream = await this.openai.chat.completions.create({
           model: this.activeModel,
           max_tokens: 4096,
           stream: true,
-          messages: [{ role: 'system', content: systemPrompt }, ...openaiMessages],
+          messages: [
+            { role: 'system', content: systemPrompt },
+            {
+              role: 'user',
+              content: [
+                { type: 'image_url', image_url: { url: `data:image/png;base64,${base64Image}`, detail: 'high' } },
+                { type: 'text', text: userText },
+              ],
+            },
+          ],
         }, { signal: this.abortController.signal })
 
         for await (const chunk of stream) {
@@ -700,7 +650,13 @@ export class LLMWorker {
           model: this.activeModel,
           max_tokens: 4096,
           system: systemPrompt,
-          messages,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: 'image/png', data: base64Image } },
+              { type: 'text', text: userText },
+            ],
+          }],
         })
         this.currentStream = stream
 
@@ -716,12 +672,6 @@ export class LLMWorker {
       this.ipcBus.emit('llm:done')
 
       if (fullResponse) {
-        // Store text summary in history (not the image — too large)
-        this.conversationHistory.push({ role: 'user', content: `[Screenshot at ${timestamp}] ${userText}` })
-        this.conversationHistory.push({ role: 'assistant', content: fullResponse })
-        if (this.conversationHistory.length > this.MAX_HISTORY) {
-          this.conversationHistory = this.conversationHistory.slice(-this.MAX_HISTORY)
-        }
         await this.cache.set('Screen_' + Date.now(), questionType, fullResponse)
       }
     } catch (err: any) {
@@ -743,15 +693,13 @@ export class LLMWorker {
     this.ipcBus.emit('screen:card', `Screen Analysis (${images.length} screenshots)`, 'general')
     this.isGenerating = true
     let fullResponse = ''
-    const timestamp = new Date().toLocaleTimeString()
 
     try {
-      const hasHistory = this.conversationHistory.length > 0
-      const userText = hasHistory
-        ? `${images.length} new screenshot(s) captured. Based on our session so far, continue helping me. Solve all questions visible across these screens.`
-        : `Solve all questions shown across these ${images.length} screenshots.`
+      // Treat each screenshot batch as an independent question set — no prior
+      // history is mixed in, to prevent format/template copying.
+      const userText = `Solve every question visible across these ${images.length} screenshot${images.length === 1 ? '' : 's'}. No preamble, no recap, no advice on delivery — just the answers.`
 
-      console.log(`[LLMWorker] Analysing ${images.length} screenshots (model: ${this.activeModel}, history: ${this.conversationHistory.length} msgs)`)
+      console.log(`[LLMWorker] Analysing ${images.length} screenshots (model: ${this.activeModel}, fresh context)`)
       const systemPrompt = getScreenAnalysisPrompt(this.sessionTestType)
 
       if (isOpenAIModel(this.activeModel)) {
@@ -760,15 +708,14 @@ export class LLMWorker {
           type: 'image_url' as const,
           image_url: { url: `data:image/png;base64,${data}`, detail: 'high' as const },
         }))
-        const openaiMessages: any[] = [
-          ...this.conversationHistory.map(m => ({ role: m.role, content: m.content })),
-          { role: 'user' as const, content: [...openaiImageBlocks, { type: 'text', text: userText }] },
-        ]
         const stream = await this.openai.chat.completions.create({
           model: this.activeModel,
           max_tokens: 4096,
           stream: true,
-          messages: [{ role: 'system', content: systemPrompt }, ...openaiMessages],
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user' as const, content: [...openaiImageBlocks, { type: 'text', text: userText }] },
+          ],
         }, { signal: this.abortController.signal })
         for await (const chunk of stream) {
           const token = chunk.choices[0]?.delta?.content ?? ''
@@ -779,16 +726,11 @@ export class LLMWorker {
           type: 'image' as const,
           source: { type: 'base64' as const, media_type: 'image/png' as const, data },
         }))
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const messages: any[] = [
-          ...this.conversationHistory,
-          { role: 'user', content: [...imageBlocks, { type: 'text', text: userText }] },
-        ]
         const stream = this.anthropic.messages.stream({
           model: this.activeModel,
           max_tokens: 4096,
           system: systemPrompt,
-          messages,
+          messages: [{ role: 'user', content: [...imageBlocks, { type: 'text', text: userText }] }],
         })
         this.currentStream = stream
         for await (const event of stream) {
@@ -801,11 +743,6 @@ export class LLMWorker {
 
       this.ipcBus.emit('llm:done')
       if (fullResponse) {
-        this.conversationHistory.push({ role: 'user', content: `[${images.length} screenshot(s) at ${timestamp}] ${userText}` })
-        this.conversationHistory.push({ role: 'assistant', content: fullResponse })
-        if (this.conversationHistory.length > this.MAX_HISTORY) {
-          this.conversationHistory = this.conversationHistory.slice(-this.MAX_HISTORY)
-        }
         await this.cache.set('ScreenMulti_' + Date.now(), 'general', fullResponse)
 
         if (this.sessionTestType && this.sessionUserId && this.sessionUserEmail) {

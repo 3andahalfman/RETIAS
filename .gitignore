@@ -9,3 +9,5 @@ electron/_env_generated.ts
 Thumbs.db
 retias-cert.pfx
 .claude/
+
+supabase/.temp/
