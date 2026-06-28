@@ -77,6 +77,8 @@ export default function LoginPage({ onLogin, isDocked, onDock, onUndock }: Props
       return 'Network error. Please check your connection.'
     if (msg.includes('already registered to another') || msg.includes('device_bound'))
       return 'This computer is registered to another account. Sign in with that account or use a different device.'
+    if (msg.includes('device_cooldown') || msg.includes('wait one hour'))
+      return 'This device was recently signed out. Please wait one hour before signing in with a different account.'
     return err?.message ?? 'Something went wrong. Please try again.'
   }
 

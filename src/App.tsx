@@ -5,11 +5,11 @@ import LoginPage from './components/LoginPage'
 import SetupWizard, { SessionConfig } from './components/SetupWizard'
 import MockInterviewSetup from './components/MockInterviewSetup'
 import OnlineTestSetup from './components/OnlineTestSetup'
-import OnlineTestEntry from './components/OnlineTestEntry'
 import SolvedTestPage from './components/SolvedTestPage'
 import PastSessions from './components/PastSessions'
 import Tutorial from './components/Tutorial'
 import UpdateBanner from './components/UpdateBanner'
+import UpdateGate from './components/UpdateGate'
 import Toolbar from './components/Toolbar'
 import Sidebar, { type SidebarItemId } from './components/Sidebar'
 import TranscriptPanel from './components/Transcript'
@@ -25,10 +25,11 @@ import PricingPage from './components/PricingPage'
 import AutoTyper from './components/AutoTyper'
 import './index.css'
 
-type View = 'dashboard' | 'setup' | 'mock-interview' | 'past-sessions' | 'session' | 'online-test-entry' | 'online-test' | 'solve-test' | 'cv-manager' | 'auto-typer' | 'settings' | 'pricing'
+type View = 'dashboard' | 'setup' | 'mock-interview' | 'past-sessions' | 'session' | 'online-test' | 'solve-test' | 'cv-manager' | 'auto-typer' | 'settings' | 'pricing'
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
+  const [updateGatePassed, setUpdateGatePassed] = useState(false)
   const [authLoading, setAuthLoading] = useState(true)
   const [cvs, setCvs] = useState<CV[]>([])
 
@@ -41,6 +42,7 @@ export default function App() {
   const [micActive, setMicActive] = useState(true)
   const [isOnlineTest, setIsOnlineTest] = useState(false)
   const [captureQueue, setCaptureQueue] = useState<string[]>([])
+  const [isAnalysingCaptures, setIsAnalysingCaptures] = useState(false)
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null)
   const [convState, setConvState] = useState<string>('IDLE')
   const [isDocked, setIsDocked] = useState(false)
@@ -65,8 +67,10 @@ export default function App() {
     window.addEventListener('mouseup', onUp)
   }, [])
 
-  // Restore session on app start
+  // Restore session after startup update gate clears
   useEffect(() => {
+    if (!updateGatePassed) return
+
     const savedId = localStorage.getItem('retias_user_id')
     if (savedId) {
       window.electronAPI?.authRestore(savedId)
@@ -84,7 +88,7 @@ export default function App() {
     } else {
       setAuthLoading(false)
     }
-  }, [])
+  }, [updateGatePassed])
 
   // Load CVs whenever user changes
   useEffect(() => {
@@ -114,6 +118,12 @@ export default function App() {
     window.electronAPI?.onConvState((state) => {
       setConvState(state)
     })
+    const unsubDone = window.electronAPI?.onAnswerDone?.(() => {
+      setIsAnalysingCaptures(false)
+    })
+    return () => {
+      unsubDone?.()
+    }
   }, [])
 
   // Apply persisted window prefs on load (stealth is admin-only; always on for others)
@@ -205,7 +215,8 @@ export default function App() {
   }
 
   const handleAnalyseAll = () => {
-    if (captureQueue.length === 0) return
+    if (captureQueue.length === 0 || isAnalysingCaptures) return
+    setIsAnalysingCaptures(true)
     window.electronAPI?.analyseScreens(captureQueue)
     setCaptureQueue([])
   }
@@ -216,6 +227,7 @@ export default function App() {
     setIsStarted(false)
     setIsOnlineTest(false)
     setCaptureQueue([])
+    setIsAnalysingCaptures(false)
     setView('dashboard')
     if (isDocked) {
       setIsDocked(false)
@@ -224,6 +236,11 @@ export default function App() {
   }
 
   const handleToggleMic = () => setMicActive((prev) => !prev)
+
+  // Block auth/login until packaged update check completes (dev skips instantly)
+  if (!updateGatePassed) {
+    return <UpdateGate onPassed={() => setUpdateGatePassed(true)} />
+  }
 
   // Loading splash
   if (authLoading) {
@@ -247,7 +264,7 @@ export default function App() {
   }
 
   // Docked non-session views
-  if (isDocked && (view === 'setup' || view === 'dashboard' || view === 'mock-interview' || view === 'online-test-entry' || view === 'online-test' || view === 'solve-test' || view === 'past-sessions' || view === 'cv-manager' || view === 'auto-typer' || view === 'settings' || view === 'pricing')) {
+  if (isDocked && (view === 'setup' || view === 'dashboard' || view === 'mock-interview' || view === 'online-test' || view === 'solve-test' || view === 'past-sessions' || view === 'cv-manager' || view === 'auto-typer' || view === 'settings' || view === 'pricing')) {
     return (
       <div className="app-root docked">
         <div
@@ -266,7 +283,8 @@ export default function App() {
   const handleSidebarNavigate = (item: SidebarItemId) => {
     if (item === 'real-interview') setView('setup')
     else if (item === 'mock-interview') setView('mock-interview')
-    else if (item === 'online-assessment') setView('online-test-entry')
+    else if (item === 'online-assessment') setView('online-test')
+    else if (item === 'solved-assessment') setView('solve-test')
     else if (item === 'sessions') setView('past-sessions')
     else if (item === 'dashboard') setView('dashboard')
     else if (item === 'cv-manager') setView('cv-manager')
@@ -335,25 +353,11 @@ export default function App() {
   if (view === 'online-test') {
     return (
       <div className="app-root">
-        <OnlineTestSetup
-          onStart={handleCreateOnlineTest}
-          onBack={() => setView('online-test-entry')}
-          onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
-        />
-      </div>
-    )
-  }
-
-  if (view === 'online-test-entry') {
-    return (
-      <div className="app-root">
         <div className="page-layout">
           <Sidebar activeItem="online-assessment" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={() => setView('pricing')} />
           <div className="page-main">
-            <OnlineTestEntry
-              user={user}
-              onSolved={() => setView('solve-test')}
-              onNew={() => setView('online-test')}
+            <OnlineTestSetup
+              onStart={handleCreateOnlineTest}
               onBack={() => setView('dashboard')}
               onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
             />
@@ -367,11 +371,11 @@ export default function App() {
     return (
       <div className="app-root">
         <div className="page-layout">
-          <Sidebar activeItem="online-assessment" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={() => setView('pricing')} />
+          <Sidebar activeItem="solved-assessment" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={() => setView('pricing')} />
           <div className="page-main">
             <SolvedTestPage
               user={user}
-              onBack={() => setView('online-test-entry')}
+              onBack={() => setView('dashboard')}
               onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
             />
           </div>
@@ -519,7 +523,9 @@ export default function App() {
             onCapture={handleCapture}
             onAnalyseAll={handleAnalyseAll}
             onClearCaptures={() => setCaptureQueue([])}
+            isAnalysingCaptures={isAnalysingCaptures}
             canAutoType={user ? hasPremiumPlusAccess(user) : false}
+            canParaphrase={user ? hasPremiumPlusAccess(user) : false}
           />
         </div>
 

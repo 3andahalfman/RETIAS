@@ -3,11 +3,15 @@ import fs from 'fs'
 import path from 'path'
 import { supabase } from './supabase.js'
 import { getDeviceId } from './device-id.js'
+import { isAdminEmail } from './admin.js'
 
 const { app } = electron as typeof import('electron')
 
 export const DEVICE_BINDING_ERROR =
   'This computer is already registered to another RETIAS account. Only one user may sign in on this device.'
+
+export const DEVICE_COOLDOWN_ERROR =
+  'This device was recently signed out. Please wait one hour before signing in with a different account.'
 
 interface LocalBinding {
   deviceId: string
@@ -56,6 +60,11 @@ function isDeviceConflict(error: { message?: string; code?: string; details?: st
   )
 }
 
+function isDeviceCooldown(error: { message?: string; code?: string; details?: string }): boolean {
+  const msg = `${error.message ?? ''} ${error.details ?? ''}`.toLowerCase()
+  return msg.includes('device_cooldown')
+}
+
 function isNetworkError(error: { message?: string }): boolean {
   const msg = (error.message ?? '').toLowerCase()
   return msg.includes('fetch') || msg.includes('network') || msg.includes('failed to fetch')
@@ -68,11 +77,18 @@ export async function assertDesktopDeviceAllowed(): Promise<void> {
   const sessionUser = sessionData.session?.user
   if (!sessionUser) throw new Error('Not authenticated')
 
+  // Admin can sign in on any device without claiming or conflicting with existing bindings.
+  if (isAdminEmail(sessionUser.email)) return
+
   const { error } = await supabase.rpc('register_desktop_device', {
     p_device_id: deviceId,
   })
 
   if (error) {
+    if (isDeviceCooldown(error)) {
+      await supabase.auth.signOut()
+      throw new Error(DEVICE_COOLDOWN_ERROR)
+    }
     if (isDeviceConflict(error)) {
       await supabase.auth.signOut()
       throw new Error(DEVICE_BINDING_ERROR)
@@ -90,6 +106,18 @@ export async function assertDesktopDeviceAllowed(): Promise<void> {
     deviceId,
     userId: sessionUser.id,
     userEmail: sessionUser.email ?? '',
+  })
+}
+
+/** Stamp logout time on the server so another account must wait 1 hour. */
+export async function recordDesktopDeviceLogout(): Promise<void> {
+  const deviceId = getDeviceId()
+  const { data: sessionData } = await supabase.auth.getSession()
+  const sessionUser = sessionData.session?.user
+  if (!sessionUser || isAdminEmail(sessionUser.email)) return
+
+  await supabase.rpc('record_desktop_device_logout', {
+    p_device_id: deviceId,
   })
 }
 

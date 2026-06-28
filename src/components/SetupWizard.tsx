@@ -401,9 +401,6 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [],
         {/* Pinned footer — outside scroll area */}
         {step === 1 && (
           <div className="setup-footer">
-            {onBack && (
-              <button type="button" className="setup-btn secondary" onClick={onBack}>← Back</button>
-            )}
             <button type="button" className="setup-btn primary" onClick={() => {
               if (!jobDescription.trim()) { setValidationMsg('Please provide a Job Description to proceed.'); return }
               if (!resumeText.trim()) { setValidationMsg('Please provide a Resume to proceed.'); return }
@@ -414,7 +411,6 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [],
         )}
         {step === 2 && (
           <div className="setup-footer">
-            <button type="button" className="setup-btn secondary" onClick={() => setStep(1)}>← Back</button>
             <button type="button" className="setup-btn primary" onClick={handleCreate}>Start Session →</button>
           </div>
         )}

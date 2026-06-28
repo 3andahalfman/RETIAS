@@ -5,8 +5,9 @@ export type SidebarItemId =
   | 'dashboard'
   | 'real-interview'
   | 'mock-interview'
-  | 'online-assessment'
   | 'sessions'
+  | 'online-assessment'
+  | 'solved-assessment'
   | 'cv-manager'
   | 'auto-typer'
   | 'settings'
@@ -37,21 +38,27 @@ interface NavSection {
 
 const NAV_SECTIONS: NavSection[] = [
   {
-    label: 'Home',
+    label: 'Overview',
     items: [{ id: 'dashboard', label: 'Dashboard', icon: '⊞' }],
   },
   {
-    label: 'Start',
+    label: 'Interviews',
     items: [
       { id: 'real-interview', label: 'Real Interview', icon: '◫', accent: '#4F80E2' },
       { id: 'mock-interview', label: 'Mock Interview', icon: '◎', accent: '#15CDCA' },
-      { id: 'online-assessment', label: 'Online Assessment', icon: '⟨⟩', accent: '#F59E0B', premium: true },
+      { id: 'sessions', label: 'Past Sessions', icon: '⏱' },
     ],
   },
   {
-    label: 'Interview',
+    label: 'Assessments',
     items: [
-      { id: 'sessions', label: 'Past Sessions', icon: '⏱' },
+      { id: 'online-assessment', label: 'Online Assessment', icon: '⟨⟩', accent: '#F59E0B', premium: true },
+      { id: 'solved-assessment', label: 'Solved Assessment', icon: '📚', accent: '#A78BFA', premiumPlus: true },
+    ],
+  },
+  {
+    label: 'Tools',
+    items: [
       { id: 'cv-manager', label: 'CV Manager', icon: '📄' },
       { id: 'auto-typer', label: 'Auto-Typer', icon: '⌨', premiumPlus: true },
     ],

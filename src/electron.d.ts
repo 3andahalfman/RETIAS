@@ -94,7 +94,7 @@ interface ElectronAPI {
 
   // Answer streaming
   onToken: (cb: (token: string) => void) => void
-  onAnswerDone: (cb: () => void) => void
+  onAnswerDone: (cb: () => void) => () => void
   onQuestionDetected: (cb: (question: string, type: string) => void) => void
   onQuestionUpdate: (cb: (question: string, type: string) => void) => void
   onConvState: (cb: (state: string) => void) => void
@@ -177,6 +177,16 @@ interface ElectronAPI {
     source_url: string | null
     created_at: string
   }>>
+
+  // Auto-updater
+  getUpdateCheckStatus?: () => Promise<{ status: 'skipped' | 'checking' | 'up-to-date' | 'available' | 'error'; version?: string | null }>
+  onUpdateCheckStatus?: (cb: (result: { status: 'skipped' | 'checking' | 'up-to-date' | 'available' | 'error'; version?: string | null }) => void) => () => void
+  retryUpdateCheck?: () => Promise<{ status: 'skipped' | 'checking' | 'up-to-date' | 'available' | 'error'; version?: string | null }>
+  onUpdateAvailable?: (cb: (version: string) => void) => void
+  onUpdateProgress?: (cb: (percent: number) => void) => void
+  onUpdateDownloaded?: (cb: () => void) => void
+  downloadUpdate?: () => void
+  installUpdate?: () => void
 
   // Auto-Typer
   autoTypeStart?: (opts: {

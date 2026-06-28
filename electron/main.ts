@@ -34,6 +34,123 @@ const isDev = process.env.NODE_ENV === 'development'
 
 let overlayWindow: BrowserWindow | null = null
 let ipcBus: IpcBus
+
+// Startup update gate — checked before auth/login (packaged builds only).
+type UpdateCheckStatus = 'skipped' | 'checking' | 'up-to-date' | 'available' | 'error'
+const UPDATE_CHECK_TIMEOUT_MS = 20_000
+
+let updateCheckStatus: UpdateCheckStatus = app.isPackaged ? 'checking' : 'skipped'
+let updateAvailableVersion: string | null = null
+let startupUpdateCheckPromise: Promise<void> | null = null
+
+function sendUpdateCheckStatus() {
+  if (!overlayWindow || overlayWindow.isDestroyed()) return
+  overlayWindow.webContents.send('update:check-status', {
+    status: updateCheckStatus,
+    version: updateAvailableVersion,
+  })
+}
+
+function setUpdateCheckStatus(status: UpdateCheckStatus, version?: string | null) {
+  updateCheckStatus = status
+  if (version !== undefined) updateAvailableVersion = version
+  sendUpdateCheckStatus()
+}
+
+function waitForUpdateCheckResult(): Promise<{ available: boolean; version?: string }> {
+  return new Promise((resolve) => {
+    const cleanup = () => {
+      autoUpdater.removeListener('update-available', onAvailable)
+      autoUpdater.removeListener('update-not-available', onNotAvailable)
+      autoUpdater.removeListener('error', onError)
+    }
+    const onAvailable = (info: { version?: string }) => {
+      cleanup()
+      resolve({ available: true, version: info.version })
+    }
+    const onNotAvailable = () => {
+      cleanup()
+      resolve({ available: false })
+    }
+    const onError = (err: Error) => {
+      cleanup()
+      logger.warn('[Updater] Check error:', err.message)
+      resolve({ available: false })
+    }
+
+    autoUpdater.once('update-available', onAvailable)
+    autoUpdater.once('update-not-available', onNotAvailable)
+    autoUpdater.once('error', onError)
+
+    autoUpdater.checkForUpdates().catch((err: Error) => {
+      cleanup()
+      logger.warn('[Updater] checkForUpdates rejected:', err.message)
+      resolve({ available: false })
+    })
+  })
+}
+
+async function runStartupUpdateCheck(force = false): Promise<void> {
+  if (!app.isPackaged) {
+    setUpdateCheckStatus('skipped')
+    return
+  }
+
+  if (startupUpdateCheckPromise && !force) return startupUpdateCheckPromise
+
+  startupUpdateCheckPromise = (async () => {
+    setUpdateCheckStatus('checking')
+
+    try {
+      const outcome = await Promise.race([
+        waitForUpdateCheckResult(),
+        new Promise<{ available: false; timedOut: true }>((resolve) =>
+          setTimeout(() => resolve({ available: false, timedOut: true }), UPDATE_CHECK_TIMEOUT_MS),
+        ),
+      ])
+
+      if ('timedOut' in outcome && outcome.timedOut) {
+        logger.warn('[Updater] Startup check timed out — fail open')
+        setUpdateCheckStatus('error')
+        return
+      }
+
+      if (outcome.available) {
+        setUpdateCheckStatus('available', outcome.version ?? null)
+      } else {
+        setUpdateCheckStatus('up-to-date')
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      logger.warn('[Updater] Startup check failed:', msg)
+      setUpdateCheckStatus('error')
+    }
+  })()
+
+  return startupUpdateCheckPromise
+}
+
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = true
+
+  autoUpdater.on('update-available', (info) => {
+    overlayWindow?.webContents.send('update:available', info.version)
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    overlayWindow?.webContents.send('update:progress', Math.round(progress.percent))
+  })
+
+  autoUpdater.on('update-downloaded', () => {
+    overlayWindow?.webContents.send('update:downloaded')
+  })
+
+  autoUpdater.on('error', (err) => {
+    logger.warn('[Updater] Error:', err.message)
+    console.warn('[Updater] Error:', err.message)
+  })
+}
 let currentUserId: string | null = null
 let currentUserEmail: string | null = null
 let currentUserIsPremium = false
@@ -160,6 +277,19 @@ async function bootstrap() {
 
   // Single overlay window — everything runs here
   overlayWindow = createOverlayWindow()
+
+  // Re-sync gate status once the renderer can receive IPC (page may still be loading).
+  overlayWindow.webContents.on('did-finish-load', () => {
+    sendUpdateCheckStatus()
+  })
+
+  // Startup update check runs in parallel with first paint (packaged builds only).
+  if (app.isPackaged) {
+    setupAutoUpdater()
+    void runStartupUpdateCheck()
+  } else {
+    setUpdateCheckStatus('skipped')
+  }
 
   // Initialize IPC bus
   ipcBus = new IpcBus(overlayWindow)
@@ -470,7 +600,7 @@ async function bootstrap() {
     const { startGoogleOAuth } = await import('./lib/google-oauth.js')
     const { findOrCreateGoogleUser } = await import('./lib/auth-store.js')
     const info = await startGoogleOAuth()
-    const user = await findOrCreateGoogleUser(info.googleId, info.email, info.name)
+    const user = await findOrCreateGoogleUser(info.googleId, info.email, info.name, info.idToken)
     currentUserId = user.id
     currentUserEmail = user.email
     currentUserIsPremium = user.is_premium
@@ -668,38 +798,24 @@ async function bootstrap() {
     }
   })
 
-  // ── Auto-updater ────────────────────────────────────────────────────────────
-  if (app.isPackaged) {
-    autoUpdater.autoDownload = false
-    autoUpdater.autoInstallOnAppQuit = true
+  // ── Auto-updater (IPC — gate check runs at window creation above) ───────────
+  ipcMain.handle('update:get-check-status', () => ({
+    status: updateCheckStatus,
+    version: updateAvailableVersion,
+  }))
 
-    autoUpdater.on('update-available', (info) => {
-      overlayWindow?.webContents.send('update:available', info.version)
-    })
-
-    autoUpdater.on('download-progress', (progress) => {
-      overlayWindow?.webContents.send('update:progress', Math.round(progress.percent))
-    })
-
-    autoUpdater.on('update-downloaded', () => {
-      overlayWindow?.webContents.send('update:downloaded')
-    })
-
-    autoUpdater.on('error', (err) => {
-      logger.warn('[Updater] Error:', err.message)
-      console.warn('[Updater] Error:', err.message)
-    })
-
-    // Check silently 3 seconds after launch so it doesn't block startup
-    setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 3000)
-  }
+  ipcMain.handle('update:retry-check', async () => {
+    startupUpdateCheckPromise = null
+    await runStartupUpdateCheck(true)
+    return { status: updateCheckStatus, version: updateAvailableVersion }
+  })
 
   ipcMain.on('update:download', () => {
-    autoUpdater.downloadUpdate().catch(console.error)
+    if (app.isPackaged) autoUpdater.downloadUpdate().catch(console.error)
   })
 
   ipcMain.on('update:install', () => {
-    autoUpdater.quitAndInstall()
+    if (app.isPackaged) autoUpdater.quitAndInstall()
   })
 
   // Mock interview — generates a job description from the candidate's resume

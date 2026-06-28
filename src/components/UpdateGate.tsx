@@ -1,0 +1,130 @@
+import { useCallback, useEffect, useState } from 'react'
+import {
+  downloadUpdate,
+  initNotificationListeners,
+  installUpdate,
+  useAppNotifications,
+} from '../lib/notification-store'
+
+type UpdateCheckStatus = 'skipped' | 'checking' | 'up-to-date' | 'available' | 'error'
+
+interface UpdateGateProps {
+  onPassed: () => void
+}
+
+function passesGate(status: UpdateCheckStatus): boolean {
+  return status === 'skipped' || status === 'up-to-date'
+}
+
+export default function UpdateGate({ onPassed }: UpdateGateProps) {
+  const [checkStatus, setCheckStatus] = useState<UpdateCheckStatus>('checking')
+  const [version, setVersion] = useState('')
+  const { phase, progress } = useAppNotifications()
+
+  const applyCheckResult = useCallback((result: { status: UpdateCheckStatus; version?: string | null }) => {
+    setCheckStatus(result.status)
+    if (result.version) setVersion(result.version)
+    if (passesGate(result.status)) onPassed()
+  }, [onPassed])
+
+  useEffect(() => {
+    initNotificationListeners()
+    const api = window.electronAPI
+    if (!api?.getUpdateCheckStatus) {
+      onPassed()
+      return
+    }
+
+    api.getUpdateCheckStatus().then(applyCheckResult).catch(() => onPassed())
+
+    const unsub = api.onUpdateCheckStatus?.(applyCheckResult)
+    return () => unsub?.()
+  }, [applyCheckResult, onPassed])
+
+  const handleRetry = () => {
+    setCheckStatus('checking')
+    window.electronAPI?.retryUpdateCheck?.()
+      .then(applyCheckResult)
+      .catch(() => setCheckStatus('error'))
+  }
+
+  // Checking — minimal splash while main process talks to update server
+  if (checkStatus === 'checking') {
+    return (
+      <div className="app-root auth-loading-root update-gate-root">
+        <img src="./logo.svg" alt="RETIAS" className="auth-loading-logo" />
+        <p className="update-gate-status">Checking for updates…</p>
+      </div>
+    )
+  }
+
+  // Fail open — offline or server unreachable; user can continue or retry
+  if (checkStatus === 'error') {
+    return (
+      <div className="app-root auth-loading-root">
+        <div className="force-update-overlay" style={{ position: 'relative', background: 'transparent', backdropFilter: 'none' }}>
+          <div className="force-update-card">
+            <div className="force-update-icon">⚠️</div>
+            <h2 className="force-update-title">Update check failed</h2>
+            <p className="force-update-body">
+              Could not reach the update server. You can continue with the current version or try again.
+            </p>
+            <button type="button" className="force-update-btn" onClick={onPassed}>
+              Continue offline
+            </button>
+            <button
+              type="button"
+              className="force-update-btn force-update-btn-secondary"
+              onClick={handleRetry}
+              style={{ marginTop: 10, background: 'transparent', border: '1px solid #1A2540', color: 'var(--text-muted)' }}
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Update required — block app until downloaded and installed
+  if (checkStatus === 'available') {
+    return (
+      <div className="app-root auth-loading-root">
+        <div className="force-update-overlay" style={{ position: 'relative', background: 'transparent', backdropFilter: 'none' }}>
+          <div className="force-update-card">
+            <div className="force-update-icon">⬆️</div>
+            <h2 className="force-update-title">Update required</h2>
+            {phase === 'ready' ? (
+              <>
+                <p className="force-update-body">Update downloaded — restart to apply the latest version.</p>
+                <button type="button" className="force-update-btn" onClick={installUpdate}>
+                  Restart &amp; Install
+                </button>
+              </>
+            ) : phase === 'downloading' ? (
+              <div className="force-update-progress-wrap">
+                <p className="force-update-body" style={{ marginBottom: 0 }}>Downloading update…</p>
+                <div className="update-banner-bar">
+                  <div className="update-banner-fill" style={{ width: `${progress}%` }} />
+                </div>
+                <span className="force-update-pct">{progress}%</span>
+              </div>
+            ) : (
+              <>
+                <p className="force-update-body">
+                  Version <strong style={{ color: '#fff' }}>{version}</strong> is available.
+                  Download and install it to continue.
+                </p>
+                <button type="button" className="force-update-btn" onClick={downloadUpdate}>
+                  Download update
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return null
+}

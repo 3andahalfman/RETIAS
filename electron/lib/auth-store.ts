@@ -1,6 +1,6 @@
 import { supabase } from './supabase.js'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
-import { assertDesktopDeviceAllowed } from './device-binding.js'
+import { assertDesktopDeviceAllowed, recordDesktopDeviceLogout } from './device-binding.js'
 import { isAdminEmail } from './admin.js'
 
 export interface User {
@@ -46,6 +46,30 @@ async function fetchProfileDisplayName(userId: string): Promise<string | null> {
 async function enrichUser(u: SupabaseUser): Promise<User> {
   const profileName = await fetchProfileDisplayName(u.id)
   return mapUser(u, profileName)
+}
+
+/** Reject phantom/fake sessions Supabase returns for duplicate sign-ups. */
+async function finalizeAuth(expectedEmail: string): Promise<User> {
+  const normalized = expectedEmail.toLowerCase().trim()
+  const { data: sessionData } = await supabase.auth.getSession()
+  if (!sessionData.session?.access_token) {
+    throw new Error('Login did not create a valid session. Please try again.')
+  }
+
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError || !userData.user?.id || !userData.user.email) {
+    console.error('[auth-store] getUser after login failed:', userError?.message)
+    await supabase.auth.signOut()
+    throw new Error('Could not verify your account after login. Please try again.')
+  }
+  if (userData.user.email.toLowerCase() !== normalized) {
+    await supabase.auth.signOut()
+    throw new Error('Login email mismatch — please contact support.')
+  }
+
+  const user = await enrichUser(userData.user)
+  await assertDesktopDeviceAllowed()
+  return user
 }
 
 export async function checkUsernameAvailable(displayName: string): Promise<boolean> {
@@ -103,58 +127,53 @@ export async function loginUser(email: string, password: string): Promise<User> 
     password,
   })
   if (error) throw new Error(error.message)
-  if (!data.user) throw new Error('Login failed')
-  const user = await enrichUser(data.user)
-  await assertDesktopDeviceAllowed()
-  return user
+  if (!data.user || !data.session) throw new Error('Login failed')
+  return finalizeAuth(email)
 }
 
 export async function findOrCreateGoogleUser(
   googleId: string,
   email: string,
-  displayName: string
+  displayName: string,
+  idToken?: string,
 ): Promise<User> {
   const normalizedEmail = email.toLowerCase().trim()
   const derivedPassword = `retias_google_${googleId}`
 
-  // Try sign in first (user already registered)
+  if (!idToken) {
+    throw new Error('Google sign-in failed — no ID token received.')
+  }
+
+  const { data: idData, error: idError } = await supabase.auth.signInWithIdToken({
+    provider: 'google',
+    token: idToken,
+  })
+  if (!idError && idData.user && idData.session) {
+    console.log('[auth-store] Google sign-in via ID token OK:', idData.user.id)
+    return finalizeAuth(normalizedEmail)
+  }
+
+  const idTokenMsg = idError?.message ?? 'unknown error'
+  console.error('[auth-store] signInWithIdToken failed:', idTokenMsg)
+
+  // Legacy desktop accounts created with the derived-password flow only
   const { data: signInData, error: signInError } =
     await supabase.auth.signInWithPassword({
       email: normalizedEmail,
       password: derivedPassword,
     })
-  if (!signInError && signInData.user) {
-    const user = await enrichUser(signInData.user)
-    await assertDesktopDeviceAllowed()
-    return user
+  if (!signInError && signInData.user && signInData.session) {
+    console.log('[auth-store] Google legacy password sign-in OK:', signInData.user.id)
+    return finalizeAuth(normalizedEmail)
   }
 
-  // Create new account
-  const trimmedName = displayName.trim() || normalizedEmail
-  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-    email: normalizedEmail,
-    password: derivedPassword,
-    options: {
-      data: {
-        display_name: trimmedName,
-        google_id: googleId,
-      },
-    },
-  })
-  if (signUpError) throw new Error(signUpError.message)
-  if (!signUpData.user) throw new Error('Google sign-in failed')
-
-  const { error: profileError } = await supabase
-    .from('profiles')
-    .insert({ id: signUpData.user.id, display_name: trimmedName })
-  if (profileError && profileError.code !== '23505') {
-    console.error('[auth-store] profile insert error:', profileError.message)
-  }
-
-  const user = await enrichUser(signUpData.user)
-  const { data: sessionData } = await supabase.auth.getSession()
-  if (sessionData.session) await assertDesktopDeviceAllowed()
-  return user
+  // Never call signUp for an existing Google account — Supabase returns phantom user IDs.
+  throw new Error(
+    'Could not link your Google account. '
+    + 'In Supabase → Authentication → Providers → Google, add the same Google Client ID '
+    + 'RETIAS uses in .env (GOOGLE_CLIENT_ID). '
+    + `Details: ${idTokenMsg}`,
+  )
 }
 
 export async function getUserById(userId: string): Promise<User | null> {
@@ -191,5 +210,8 @@ export async function updateDisplayName(userId: string, displayName: string): Pr
 }
 
 export async function authLogout(): Promise<void> {
+  await recordDesktopDeviceLogout().catch((err) => {
+    console.warn('[auth-store] recordDesktopDeviceLogout failed:', err?.message ?? err)
+  })
   await supabase.auth.signOut()
 }

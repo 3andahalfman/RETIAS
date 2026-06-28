@@ -123,9 +123,6 @@ export default function OnlineTestSetup({ onStart, onBack, onDock }: Props) {
       </div>
 
       <div className="setup-footer">
-        <button type="button" className="setup-btn secondary" onClick={onBack}>
-          ← Back
-        </button>
         <button
           type="button"
           className="setup-btn primary"

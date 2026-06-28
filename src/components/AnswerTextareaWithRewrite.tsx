@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import AnswerSelectionToolbar from './AnswerSelectionToolbar'
+import { replacePlainSelectionInMarkdown } from '../lib/markdown-selection'
+import { useTextSelection } from '../lib/use-text-selection'
 
 const MAX_DRAFTS = 5
 
@@ -22,6 +25,8 @@ interface Props {
   placeholder?: string
   /** Resets drafts when the active question changes. */
   questionId?: string
+  canAutoType?: boolean
+  autoTypeLocked?: boolean
 }
 
 function countWords(text: string): number {
@@ -51,9 +56,13 @@ export default function AnswerTextareaWithRewrite({
   readOnly = false,
   placeholder = 'Paste your answer here…',
   questionId,
+  canAutoType = false,
+  autoTypeLocked = false,
 }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const previewRef = useRef<HTMLDivElement>(null)
   const [editing, setEditing] = useState(false)
+  const { selection, clearSelection } = useTextSelection(previewRef, textareaRef, editing)
   const [rewriting, setRewriting] = useState<RewriteMode | null>(null)
   const [rewriteError, setRewriteError] = useState<string | null>(null)
   const [drafts, setDrafts] = useState<AnswerDraft[]>(() => [makeDraft(value, 'original', 'Original')])
@@ -86,9 +95,12 @@ export default function AnswerTextareaWithRewrite({
   }, [drafts, onChange])
 
   const applyRewrite = useCallback(async (mode: RewriteMode) => {
-    const sourceText = (drafts[activeDraftIdx]?.text ?? value).trim()
+    const fullText = (drafts[activeDraftIdx]?.text ?? value).trim()
+    const highlighted = selection?.text?.trim()
+    const sourceText = highlighted || fullText
+
     if (!sourceText) {
-      setRewriteError('Nothing to rewrite — add some text first.')
+      setRewriteError('Nothing to rewrite — add or highlight some text first.')
       return
     }
     if (!window.electronAPI?.paraphraseSelection) {
@@ -104,7 +116,28 @@ export default function AnswerTextareaWithRewrite({
         throw new Error('Rewrite produced no output. Check the dev console for details.')
       }
 
-      const newDraft = makeDraft(result.trim(), mode, MODE_LABELS[mode])
+      const rewritten = result.trim()
+
+      if (highlighted) {
+        let nextText = fullText
+        try {
+          nextText = replacePlainSelectionInMarkdown(fullText, highlighted, rewritten)
+        } catch {
+          nextText = fullText.replace(highlighted, rewritten)
+        }
+        const newDraft = makeDraft(nextText, mode, `${MODE_LABELS[mode]} (selection)`)
+        setDrafts((prev) => {
+          const next = [...prev, newDraft]
+          const capped = next.length > MAX_DRAFTS ? next.slice(-MAX_DRAFTS) : next
+          setActiveDraftIdx(capped.length - 1)
+          onChange(newDraft.text)
+          return capped
+        })
+        clearSelection()
+        return
+      }
+
+      const newDraft = makeDraft(rewritten, mode, MODE_LABELS[mode])
       setDrafts((prev) => {
         const next = [...prev, newDraft]
         const capped = next.length > MAX_DRAFTS ? next.slice(-MAX_DRAFTS) : next
@@ -117,9 +150,30 @@ export default function AnswerTextareaWithRewrite({
     } finally {
       setRewriting(null)
     }
-  }, [activeDraftIdx, drafts, value, onChange])
+  }, [activeDraftIdx, clearSelection, drafts, onChange, selection?.text, value])
+
+  const handleReplaceSelection = useCallback((replacement: string) => {
+    const fullText = drafts[activeDraftIdx]?.text ?? value
+    if (!selection?.text) return
+
+    if (editing && textareaRef.current) {
+      const ta = textareaRef.current
+      const start = ta.selectionStart
+      const end = ta.selectionEnd
+      const nextText = fullText.slice(0, start) + replacement + fullText.slice(end)
+      handleTextChange(nextText)
+      return
+    }
+
+    try {
+      handleTextChange(replacePlainSelectionInMarkdown(fullText, selection.text, replacement))
+    } catch {
+      handleTextChange(fullText.replace(selection.text, replacement))
+    }
+  }, [activeDraftIdx, drafts, editing, handleTextChange, selection?.text, value])
 
   const editorContent = activeDraft?.text ?? value
+  const hasRewriteTarget = !!(selection?.text?.trim() || editorContent.trim())
 
   return (
     <div className="humanizer-editor">
@@ -147,7 +201,7 @@ export default function AnswerTextareaWithRewrite({
             rows={12}
           />
         ) : (
-          <div className="humanizer-preview">
+          <div ref={previewRef} className="humanizer-preview humanizer-preview--selectable">
             {editorContent.trim() ? (
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{editorContent}</ReactMarkdown>
             ) : (
@@ -160,42 +214,60 @@ export default function AnswerTextareaWithRewrite({
           <div className="humanizer-action-bar">
             <span className="humanizer-word-count">
               {wordCount.toLocaleString()} word{wordCount !== 1 ? 's' : ''}
+              {selection?.text ? ' · selection active' : ''}
             </span>
             <div className="humanizer-action-btns">
               <button
                 type="button"
                 className="humanizer-btn humanizer-btn--secondary"
-                disabled={!!rewriting || !editorContent.trim()}
+                disabled={!!rewriting || !hasRewriteTarget}
                 onClick={() => applyRewrite('paraphrase')}
               >
                 <span className="humanizer-btn-icon humanizer-btn-icon--paraphrase">↻</span>
-                {rewriting === 'paraphrase' ? 'Paraphrasing…' : 'Paraphrase'}
+                {rewriting === 'paraphrase' ? 'Paraphrasing…' : selection?.text ? 'Paraphrase selection' : 'Paraphrase'}
               </button>
               <button
                 type="button"
                 className="humanizer-btn humanizer-btn--secondary"
-                disabled={!!rewriting || !editorContent.trim()}
+                disabled={!!rewriting || !hasRewriteTarget}
                 onClick={() => applyRewrite('humanize')}
               >
                 <span className="humanizer-btn-icon humanizer-btn-icon--humanize">✦</span>
-                {rewriting === 'humanize' ? 'Humanizing…' : 'Humanize'}
+                {rewriting === 'humanize' ? 'Humanizing…' : selection?.text ? 'Humanize selection' : 'Humanize'}
               </button>
               <button
                 type="button"
                 className="humanizer-btn humanizer-btn--primary"
-                disabled={!!rewriting || !editorContent.trim()}
+                disabled={!!rewriting || !hasRewriteTarget}
                 onClick={() => applyRewrite('humanize-strong')}
                 title="Runs Humanize then Rephrase for stronger AI-detection bypass"
               >
                 <span className="humanizer-btn-icon humanizer-btn-icon--strong">✦✦</span>
-                {rewriting === 'humanize-strong' ? 'Humanizing+…' : 'Humanize+'}
+                {rewriting === 'humanize-strong' ? 'Humanizing+…' : selection?.text ? 'Humanize+ selection' : 'Humanize+'}
               </button>
             </div>
           </div>
         )}
+
+        {paraphraseEnabled && !readOnly && (
+          <p className="answer-selection-hint">
+            Highlight any part of the answer to rewrite or auto-type just that section.
+          </p>
+        )}
       </div>
 
       {rewriteError && <p className="solved-test-rewrite-error">{rewriteError}</p>}
+
+      {paraphraseEnabled && !readOnly && selection && (
+        <AnswerSelectionToolbar
+          selection={selection}
+          onDismiss={clearSelection}
+          onReplaceSelection={handleReplaceSelection}
+          canAutoType={canAutoType}
+          canParaphrase
+          autoTypeLocked={autoTypeLocked}
+        />
+      )}
 
       {paraphraseEnabled && !readOnly && (
         <div className="humanizer-advanced">

@@ -48,14 +48,27 @@ export function stripMarkdown(input: string): string {
   text = text.replace(/^\s*\|?\s*:?-{3,}:?(\s*\|\s*:?-{3,}:?)*\s*\|?\s*$/gm, '')
   text = text.replace(/\s*\|\s*/g, '  ')
 
-  // Bold / italic / strikethrough emphasis
-  text = text.replace(/(\*\*|__)(.*?)\1/g, '$2')
-  text = text.replace(/(\*|_)([^*_\n]+?)\1/g, '$2')
-  text = text.replace(/~~(.*?)~~/g, '$1')
+  // Bold / italic / strikethrough emphasis — repeat a few times for nested pairs.
+  for (let i = 0; i < 3; i++) {
+    text = text.replace(/(\*\*|__)(.*?)\1/g, '$2')
+    text = text.replace(/(\*|_)([^*_\n]+?)\1/g, '$2')
+    text = text.replace(/~~(.*?)~~/g, '$1')
+  }
+
+  // Math delimiters (remark-math / KaTeX) — keep the expression, drop wrappers.
+  text = text.replace(/\$\$([\s\S]+?)\$\$/g, '$1')
+  text = text.replace(/(?<![\\$])\$([^$\n]+?)\$(?!\$)/g, '$1')
+  text = text.replace(/\\\[([\s\S]+?)\\\]/g, '$1')
+  text = text.replace(/\\\((.+?)\\\)/g, '$1')
 
   // Collapse 3+ consecutive blank lines down to 2 so paragraph breaks survive
   // but huge gaps from removed headings don't pile up.
   text = text.replace(/\n{3,}/g, '\n\n')
 
   return text.trim()
+}
+
+/** Plain text payload for Auto-Typer IPC — strips markdown syntax only. */
+export function prepareAutoTypeText(input: string): string {
+  return stripMarkdown(input)
 }

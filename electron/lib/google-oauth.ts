@@ -6,6 +6,7 @@ interface GoogleUserInfo {
   email: string
   name: string
   googleId: string
+  idToken: string
 }
 
 function base64URLEncode(buffer: Buffer): string {
@@ -152,6 +153,7 @@ export async function startGoogleOAuth(): Promise<GoogleUserInfo> {
           email: claims.email,
           name: claims.name || claims.email,
           googleId: claims.sub,
+          idToken: tokenData.id_token,
         })
       } catch (err: any) {
         reject(err)

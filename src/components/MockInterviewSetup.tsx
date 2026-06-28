@@ -235,12 +235,8 @@ export default function MockInterviewSetup({ onCreateSession, onBack, onDock, cv
         {error && <div className="mock-error">{error}</div>}
       </div>
 
-      {/* Footer — always visible outside scrollable body */}
-      <div className="mock-fixed-footer">
-        <button type="button" className="setup-btn secondary" onClick={onBack} disabled={generating}>
-          ← Back
-        </button>
-        {generatedJD && (
+      {generatedJD && (
+        <div className="mock-fixed-footer">
           <button
             type="button"
             className="setup-btn primary"
@@ -249,8 +245,8 @@ export default function MockInterviewSetup({ onCreateSession, onBack, onDock, cv
           >
             Start Mock Interview →
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -7,6 +7,9 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import 'katex/dist/katex.min.css'
 import { AutoTypeHeaderButton, AutoTypeStatusStrip } from './InlineAutoTyper'
+import AnswerSelectionToolbar from './AnswerSelectionToolbar'
+import { replacePlainSelectionInMarkdown } from '../lib/markdown-selection'
+import { useTextSelection } from '../lib/use-text-selection'
 
 interface AnswerEntry {
   question: string
@@ -26,10 +29,23 @@ interface Props {
   onCapture?: () => void
   onAnalyseAll?: () => void
   onClearCaptures?: () => void
+  isAnalysingCaptures?: boolean
   canAutoType?: boolean
+  canParaphrase?: boolean
 }
 
-export default function AnswerPanel({ isPremium = false, isOnlineTest = false, isStarted = false, captureQueue = [], onCapture, onAnalyseAll, onClearCaptures, canAutoType = false }: Props) {
+export default function AnswerPanel({
+  isPremium = false,
+  isOnlineTest = false,
+  isStarted = false,
+  captureQueue = [],
+  onCapture,
+  onAnalyseAll,
+  onClearCaptures,
+  isAnalysingCaptures = false,
+  canAutoType = false,
+  canParaphrase = false,
+}: Props) {
   const [answers, setAnswers] = useState<AnswerEntry[]>([])
   const [currentIdx, setCurrentIdx] = useState(-1)
   const [analysing, setAnalysing] = useState(false)
@@ -38,6 +54,12 @@ export default function AnswerPanel({ isPremium = false, isOnlineTest = false, i
     return saved ? Math.min(Number(saved), FONT_SIZES.length - 1) : 0
   })
   const scrollRef = useRef<HTMLDivElement>(null)
+  const answerTextRef = useRef<HTMLDivElement>(null)
+  const { selection, clearSelection } = useTextSelection(
+    answerTextRef,
+    undefined,
+    false,
+  )
 
   useEffect(() => {
     const api = window.electronAPI
@@ -83,7 +105,7 @@ export default function AnswerPanel({ isPremium = false, isOnlineTest = false, i
       })
     })
 
-    api.onAnswerDone(() => {
+    const unsubDone = api.onAnswerDone(() => {
       setAnswers((prev) => {
         if (prev.length === 0) return prev
         return [...prev.slice(0, -1), { ...prev[prev.length - 1], generating: false }]
@@ -91,10 +113,10 @@ export default function AnswerPanel({ isPremium = false, isOnlineTest = false, i
     })
 
     return () => {
+      unsubDone()
       api.removeAllListeners('question:detected')
       api.removeAllListeners('question:update')
       api.removeAllListeners('llm:token')
-      api.removeAllListeners('llm:done')
     }
   }, [])
 
@@ -113,6 +135,26 @@ export default function AnswerPanel({ isPremium = false, isOnlineTest = false, i
   const currentRef = useRef<AnswerEntry | null>(null)
   useEffect(() => { currentRef.current = current }, [current])
   const getCurrentAnswer = useCallback(() => currentRef.current?.answer ?? null, [])
+
+  const updateCurrentAnswer = useCallback((nextAnswer: string) => {
+    setAnswers((prev) => {
+      if (currentIdx < 0 || currentIdx >= prev.length) return prev
+      return prev.map((entry, i) =>
+        i === currentIdx ? { ...entry, answer: nextAnswer } : entry,
+      )
+    })
+  }, [currentIdx])
+
+  const handleReplaceSelection = useCallback((replacement: string) => {
+    const source = currentRef.current?.answer ?? ''
+    if (!selection?.text || !source) return
+    try {
+      updateCurrentAnswer(replacePlainSelectionInMarkdown(source, selection.text, replacement))
+    } catch {
+      // If markdown mapping fails, fall back to replacing the raw selection text.
+      updateCurrentAnswer(source.replace(selection.text, replacement))
+    }
+  }, [selection?.text, updateCurrentAnswer])
 
   const handleCopy = () => {
     if (current?.answer) window.electronAPI?.copyAnswer(current.answer)
@@ -192,10 +234,12 @@ export default function AnswerPanel({ isPremium = false, isOnlineTest = false, i
           ? 'Premium Plus — upgrade to unlock Auto-Typer'
           : current?.generating
             ? 'Waiting for answer to finish generating…'
-            : 'Auto-type this answer into the focused window'
+            : 'Auto-type full answer — highlight a section to type just that part'
       }
     />
   )
+
+  const selectionToolsEnabled = isOnlineTest && !current?.generating && !!current?.answer
 
   const answerTools = (
     <>
@@ -222,8 +266,8 @@ export default function AnswerPanel({ isPremium = false, isOnlineTest = false, i
         type="button"
         className="panel-analyse-btn"
         onClick={onAnalyseAll}
-        disabled={captureQueue.length === 0}
-        title="Send all screenshots to AI"
+        disabled={captureQueue.length === 0 || isAnalysingCaptures}
+        title={isAnalysingCaptures ? 'Analysis in progress…' : 'Send all screenshots to AI'}
       >
         Analyse All →
       </button>
@@ -306,7 +350,10 @@ export default function AnswerPanel({ isPremium = false, isOnlineTest = false, i
             {(current.answer || current.generating) && (
               <div className="answer-body">
                 <div className="answer-label"><span>⭐</span> Answer</div>
-                <div className="answer-text">
+                <div
+                  ref={answerTextRef}
+                  className={`answer-text${selectionToolsEnabled ? ' answer-text--selectable' : ''}`}
+                >
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkMath]}
                     rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false, output: 'html' }]]}
@@ -335,11 +382,28 @@ export default function AnswerPanel({ isPremium = false, isOnlineTest = false, i
                   </ReactMarkdown>
                   {current.generating && <span className="answer-cursor">▌</span>}
                 </div>
+                {selectionToolsEnabled && (
+                  <p className="answer-selection-hint">
+                    Highlight any part of the answer to auto-type, paraphrase, or humanize just that section.
+                  </p>
+                )}
               </div>
             )}
           </>
         )}
       </div>
+
+      {selectionToolsEnabled && selection && (
+        <AnswerSelectionToolbar
+          selection={selection}
+          onDismiss={clearSelection}
+          onReplaceSelection={handleReplaceSelection}
+          canAutoType={canAutoType}
+          canParaphrase={canParaphrase}
+          autoTypeLocked={!canAutoType}
+          paraphraseLocked={!canParaphrase}
+        />
+      )}
     </div>
   )
 }

@@ -4,6 +4,29 @@ import { supabase } from './supabase.js'
 
 const BUCKET = 'online-test-screenshots'
 const SCORE_MODEL = 'claude-sonnet-4-6'
+const CAPTURE_DEDUPE_MS = 60_000
+
+/** Guards against duplicate inserts when stale LLM worker listeners fire twice. */
+const recentCaptureKeys = new Map<string, number>()
+
+function captureDedupeKey(userId: string, images: string[], aiAnswer: string): string {
+  const imgPart = images
+    .map((img) => crypto.createHash('sha256').update(img).digest('hex').slice(0, 12))
+    .join(':')
+  const ansPart = crypto.createHash('sha256').update(aiAnswer).digest('hex').slice(0, 12)
+  return `${userId}:${imgPart}:${ansPart}`
+}
+
+function isDuplicateCapture(key: string): boolean {
+  const now = Date.now()
+  for (const [k, ts] of recentCaptureKeys) {
+    if (now - ts > CAPTURE_DEDUPE_MS) recentCaptureKeys.delete(k)
+  }
+  const last = recentCaptureKeys.get(key)
+  if (last != null && now - last < CAPTURE_DEDUPE_MS) return true
+  recentCaptureKeys.set(key, now)
+  return false
+}
 
 export interface OnlineTestCapture {
   id: string
@@ -141,6 +164,12 @@ async function uploadScreenshots(userId: string, captureId: string, images: stri
 export async function storeOnlineTestCapture(params: StoreCaptureParams): Promise<string | null> {
   const { userId, userEmail, sessionId, testType, images, aiAnswer } = params
   if (!images.length || !aiAnswer.trim()) return null
+
+  const dedupeKey = captureDedupeKey(userId, images, aiAnswer)
+  if (isDuplicateCapture(dedupeKey)) {
+    console.log('[screenshot-store] Skipping duplicate capture insert')
+    return null
+  }
 
   const captureId = crypto.randomUUID()
   const [paths, scores] = await Promise.all([

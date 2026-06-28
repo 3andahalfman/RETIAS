@@ -1,20 +1,10 @@
 -- ============================================================
--- RETIAS — One RETIAS account per desktop device
--- Run once in the Supabase SQL Editor
+-- RETIAS — 1-hour cooldown before another account can bind
+-- Run once in the Supabase SQL Editor (after desktop_device_bindings.sql)
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS desktop_device_bindings (
-  device_id       TEXT PRIMARY KEY,
-  user_id         UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  user_email      TEXT NOT NULL,
-  bound_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-  last_logout_at  TIMESTAMPTZ
-);
-
-CREATE INDEX IF NOT EXISTS idx_desktop_device_bindings_user
-  ON desktop_device_bindings (user_id);
-
-ALTER TABLE desktop_device_bindings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE desktop_device_bindings
+  ADD COLUMN IF NOT EXISTS last_logout_at TIMESTAMPTZ;
 
 -- Called on desktop sign-out by the bound user.
 CREATE OR REPLACE FUNCTION record_desktop_device_logout(p_device_id TEXT)
@@ -44,7 +34,7 @@ $$;
 REVOKE ALL ON FUNCTION record_desktop_device_logout(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION record_desktop_device_logout(TEXT) TO authenticated;
 
--- Clients register via RPC only (SECURITY DEFINER).
+-- Re-register with cooldown + transfer rules.
 CREATE OR REPLACE FUNCTION register_desktop_device(p_device_id TEXT)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -106,21 +96,3 @@ $$;
 
 REVOKE ALL ON FUNCTION register_desktop_device(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION register_desktop_device(TEXT) TO authenticated;
-
--- Lookup device owner for login screen (anon-safe via SECURITY DEFINER).
-CREATE OR REPLACE FUNCTION get_desktop_device_owner(p_device_id TEXT)
-RETURNS TEXT
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = public, auth
-STABLE
-AS $$
-  SELECT b.user_email
-  FROM desktop_device_bindings b
-  INNER JOIN auth.users u ON u.id = b.user_id
-  WHERE b.device_id = p_device_id
-  LIMIT 1;
-$$;
-
-REVOKE ALL ON FUNCTION get_desktop_device_owner(TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION get_desktop_device_owner(TEXT) TO anon, authenticated;

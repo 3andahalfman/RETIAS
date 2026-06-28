@@ -429,6 +429,12 @@ export class LLMWorker {
   // Stored handler references for proper cleanup
   private contextHandler: ((systemPrompt: string, userMessage: string, questionText: string, questionType: string) => void) | null = null
   private regenerateHandler: (() => void) | null = null
+  private sessionStartedHandler: ((config: { testType?: string; aiModel?: string; userId?: string; userEmail?: string }) => void) | null = null
+  private sessionIdHandler: ((id: string) => void) | null = null
+  private sessionStoppedHandler: (() => void) | null = null
+  private screenAnalyseHandler: ((base64Image: string) => void) | null = null
+  private screenAnalyseMultiHandler: ((images: string[]) => void) | null = null
+  private manualPromptHandler: ((prompt: string) => void) | null = null
 
   constructor(ipcBus: IpcBus) {
     this.ipcBus = ipcBus
@@ -465,7 +471,7 @@ export class LLMWorker {
       this.generate(systemPrompt, userMessage, questionText, questionType, true)
     }
 
-    this.ipcBus.on('session:started', (config: { testType?: string; aiModel?: string; userId?: string; userEmail?: string }) => {
+    this.sessionStartedHandler = (config) => {
       this.sessionTestType = config?.testType ?? null
       this.sessionUserId = config?.userId ?? null
       this.sessionUserEmail = config?.userEmail ?? null
@@ -473,22 +479,29 @@ export class LLMWorker {
       if (config?.aiModel) this.activeModel = config.aiModel
       this.conversationHistory = []
       console.log(`[LLMWorker] Session started — model: ${this.activeModel}`)
-    })
-    this.ipcBus.on('session:id', (id: string) => {
+    }
+    this.sessionIdHandler = (id) => {
       this.sessionId = id
-    })
-    this.ipcBus.on('session:stopped', () => {
+    }
+    this.sessionStoppedHandler = () => {
       this.sessionTestType = null
       this.sessionUserId = null
       this.sessionUserEmail = null
       this.sessionId = null
       this.conversationHistory = []
-    })
+    }
+    this.screenAnalyseHandler = (base64Image) => { this.analyseScreen(base64Image) }
+    this.screenAnalyseMultiHandler = (images) => { this.analyseScreenMulti(images) }
+    this.manualPromptHandler = (prompt) => { this.answerManualPrompt(prompt) }
+
+    this.ipcBus.on('session:started', this.sessionStartedHandler)
+    this.ipcBus.on('session:id', this.sessionIdHandler)
+    this.ipcBus.on('session:stopped', this.sessionStoppedHandler)
     this.ipcBus.on('context:ready', this.contextHandler)
     this.ipcBus.on('overlay:regenerate', this.regenerateHandler)
-    this.ipcBus.on('screen:analyse', (base64Image: string) => this.analyseScreen(base64Image))
-    this.ipcBus.on('screen:analyse-multi', (images: string[]) => this.analyseScreenMulti(images))
-    this.ipcBus.on('llm:manual-prompt', (prompt: string) => this.answerManualPrompt(prompt))
+    this.ipcBus.on('screen:analyse', this.screenAnalyseHandler)
+    this.ipcBus.on('screen:analyse-multi', this.screenAnalyseMultiHandler)
+    this.ipcBus.on('llm:manual-prompt', this.manualPromptHandler)
   }
 
   /** Abort the active stream if one is running, returns true if aborted */
@@ -762,8 +775,8 @@ export class LLMWorker {
       if (!isAbort) {
         console.error('[LLMWorker] Multi-screen analysis error:', err?.message)
         this.ipcBus.emit('llm:token', `\n\n⚠️ Failed to analyse ${images.length} screenshot(s). Try fewer screenshots or use single capture.`)
-        this.ipcBus.emit('llm:done')
       }
+      this.ipcBus.emit('llm:done')
     } finally {
       this.currentStream = null
       this.abortController = null
@@ -874,6 +887,30 @@ export class LLMWorker {
     if (this.regenerateHandler) {
       this.ipcBus.removeListener('overlay:regenerate', this.regenerateHandler)
       this.regenerateHandler = null
+    }
+    if (this.sessionStartedHandler) {
+      this.ipcBus.removeListener('session:started', this.sessionStartedHandler)
+      this.sessionStartedHandler = null
+    }
+    if (this.sessionIdHandler) {
+      this.ipcBus.removeListener('session:id', this.sessionIdHandler)
+      this.sessionIdHandler = null
+    }
+    if (this.sessionStoppedHandler) {
+      this.ipcBus.removeListener('session:stopped', this.sessionStoppedHandler)
+      this.sessionStoppedHandler = null
+    }
+    if (this.screenAnalyseHandler) {
+      this.ipcBus.removeListener('screen:analyse', this.screenAnalyseHandler)
+      this.screenAnalyseHandler = null
+    }
+    if (this.screenAnalyseMultiHandler) {
+      this.ipcBus.removeListener('screen:analyse-multi', this.screenAnalyseMultiHandler)
+      this.screenAnalyseMultiHandler = null
+    }
+    if (this.manualPromptHandler) {
+      this.ipcBus.removeListener('llm:manual-prompt', this.manualPromptHandler)
+      this.manualPromptHandler = null
     }
   }
 }

@@ -1,5 +1,29 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+function createIpcFanout(channel: string) {
+  const handlers = new Set<(...args: any[]) => void>()
+  ipcRenderer.on(channel, (_event, ...args) => {
+    handlers.forEach((handler) => {
+      try {
+        handler(...args)
+      } catch (err) {
+        console.error(`[preload] ${channel} handler error:`, err)
+      }
+    })
+  })
+  return {
+    subscribe(cb: (...args: any[]) => void) {
+      handlers.add(cb)
+      return () => { handlers.delete(cb) }
+    },
+    clear() {
+      handlers.clear()
+    },
+  }
+}
+
+const llmDoneFanout = createIpcFanout('llm:done')
+
 // Expose safe IPC bridge to renderer process
 contextBridge.exposeInMainWorld('electronAPI', {
   // Session control
@@ -22,10 +46,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners('llm:token')
     ipcRenderer.on('llm:token', (_e, token) => cb(token))
   },
-  onAnswerDone: (cb: () => void) => {
-    ipcRenderer.removeAllListeners('llm:done')
-    ipcRenderer.on('llm:done', () => cb())
-  },
+  onAnswerDone: (cb: () => void) => llmDoneFanout.subscribe(cb),
   onQuestionDetected: (cb: (question: string, type: string) => void) => {
     ipcRenderer.removeAllListeners('question:detected')
     ipcRenderer.on('question:detected', (_e, question, type) => cb(question, type))
@@ -87,7 +108,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openExternal: (url: string) => ipcRenderer.send('open-external', url),
 
   // Cleanup
-  removeAllListeners: (channel: string) => ipcRenderer.removeAllListeners(channel),
+  removeAllListeners: (channel: string) => {
+    if (channel === 'llm:done') {
+      llmDoneFanout.clear()
+      return
+    }
+    ipcRenderer.removeAllListeners(channel)
+  },
 
   // Auth
   authCheckUsername: (displayName: string) => ipcRenderer.invoke('auth:check-username', displayName),
@@ -117,6 +144,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listSolvedQuestions: () => ipcRenderer.invoke('solved:list-questions'),
 
   // Auto-updater
+  getUpdateCheckStatus: () => ipcRenderer.invoke('update:get-check-status'),
+  onUpdateCheckStatus: (cb: (result: { status: string; version?: string | null }) => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, result: { status: string; version?: string | null }) => cb(result)
+    ipcRenderer.on('update:check-status', handler)
+    return () => ipcRenderer.removeListener('update:check-status', handler)
+  },
+  retryUpdateCheck: () => ipcRenderer.invoke('update:retry-check'),
   onUpdateAvailable: (cb: (version: string) => void) => ipcRenderer.on('update:available', (_e, version) => cb(version)),
   onUpdateProgress: (cb: (percent: number) => void) => ipcRenderer.on('update:progress', (_e, percent) => cb(percent)),
   onUpdateDownloaded: (cb: () => void) => ipcRenderer.on('update:downloaded', () => cb()),

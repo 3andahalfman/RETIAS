@@ -408,6 +408,8 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
                         value={displayAnswer}
                         onChange={setDisplayAnswer}
                         paraphraseEnabled={!!current.paraphrase_enabled}
+                        canAutoType={canAutoType}
+                        autoTypeLocked={!canAutoType}
                       />
                     )}
                   </div>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { loadSettings } from './Settings'
-import { stripMarkdown } from '../lib/markdown-strip'
+import { prepareAutoTypeText } from '../lib/markdown-strip'
 import { useAutoTypeStatus, AutoTypeEngineState } from '../lib/auto-type-status'
 
 /**
@@ -68,7 +68,7 @@ export function AutoTypeHeaderButton({ getText, disabled, title, compact, locked
     if (active || locked) return
     const raw = getText()
     if (!raw) return
-    const text = stripMarkdown(raw)
+    const text = prepareAutoTypeText(raw)
     if (!text.trim()) return
     const s = loadSettings()
     window.electronAPI?.autoTypeStart?.({
