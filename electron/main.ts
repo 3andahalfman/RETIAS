@@ -596,57 +596,7 @@ async function bootstrap() {
     return user
   })
 
-  // ── Admin: online test screenshot library ─────────────────────────────────
-
-  ipcMain.handle('admin:list-screenshots', async (_e, offset = 0, limit = 50) => {
-    const { isAdminEmail } = await import('./lib/admin.js')
-    if (!isAdminEmail(currentUserEmail)) throw new Error('Unauthorized')
-    const { listOnlineTestCaptures, getOnlineTestCaptureStats } = await import('./lib/screenshot-store.js')
-    const [captures, stats] = await Promise.all([
-      listOnlineTestCaptures(limit, offset),
-      getOnlineTestCaptureStats(),
-    ])
-    return { captures, stats }
-  })
-
-  ipcMain.handle('admin:screenshot-library-overview', async () => {
-    const { isAdminEmail } = await import('./lib/admin.js')
-    if (!isAdminEmail(currentUserEmail)) throw new Error('Unauthorized')
-    const { getOnlineTestCaptureStats, listOnlineTestCaptureUsers } = await import('./lib/screenshot-store.js')
-    const [stats, users] = await Promise.all([
-      getOnlineTestCaptureStats(),
-      listOnlineTestCaptureUsers(),
-    ])
-    return { stats, users }
-  })
-
-  ipcMain.handle('admin:list-captures-for-user', async (_e, email: unknown) => {
-    const { isAdminEmail } = await import('./lib/admin.js')
-    if (!isAdminEmail(currentUserEmail)) throw new Error('Unauthorized')
-    if (typeof email !== 'string' || !email.trim()) throw new Error('Invalid email')
-    const { listCapturesForUser } = await import('./lib/screenshot-store.js')
-    return listCapturesForUser(email.trim())
-  })
-
-  ipcMain.handle('admin:get-screenshot-url', async (_e, path: string) => {
-    const { isAdminEmail } = await import('./lib/admin.js')
-    if (!isAdminEmail(currentUserEmail)) throw new Error('Unauthorized')
-    if (typeof path !== 'string' || path.includes('..') || !/^[\w-]+\/[\w-]+\/\d+\.png$/.test(path)) {
-      throw new Error('Invalid path')
-    }
-    const { supabase } = await import('./lib/supabase.js')
-    await supabase.auth.refreshSession().catch(() => {})
-    const { getScreenshotSignedUrl } = await import('./lib/screenshot-store.js')
-    return getScreenshotSignedUrl(path)
-  })
-
-  ipcMain.handle('admin:upsert-solved-questions', async (_e, rows: unknown) => {
-    const { isAdminEmail } = await import('./lib/admin.js')
-    if (!isAdminEmail(currentUserEmail)) throw new Error('Unauthorized')
-    if (!Array.isArray(rows) || !rows.length) throw new Error('No questions to send')
-    const { upsertSolvedQuestions } = await import('./lib/solved-questions-store.js')
-    return upsertSolvedQuestions(rows as import('./lib/solved-questions-store.js').UpsertSolvedPayload[])
-  })
+  // ── Solved Assessment bank (Premium Plus browse) ───────────────────────────
 
   ipcMain.handle('solved:list-questions', async () => {
     const { isAdminEmail } = await import('./lib/admin.js')
@@ -656,28 +606,6 @@ async function bootstrap() {
     }
     const { listSolvedQuestions } = await import('./lib/solved-questions-store.js')
     return listSolvedQuestions()
-  })
-
-  ipcMain.handle('solved:delete-questions', async (_e, ids: unknown) => {
-    const { isAdminEmail } = await import('./lib/admin.js')
-    if (!isAdminEmail(currentUserEmail)) throw new Error('Admin only')
-    if (!Array.isArray(ids) || !ids.every((id) => typeof id === 'string' && id.trim())) {
-      throw new Error('Invalid question ids')
-    }
-    const { deleteSolvedQuestions } = await import('./lib/solved-questions-store.js')
-    return deleteSolvedQuestions(ids as string[])
-  })
-
-  ipcMain.handle('solved:delete-assessment', async (_e, payload: unknown) => {
-    const { isAdminEmail } = await import('./lib/admin.js')
-    if (!isAdminEmail(currentUserEmail)) throw new Error('Admin only')
-    if (!payload || typeof payload !== 'object') throw new Error('Invalid payload')
-    const { platform, assessment_type } = payload as { platform?: string; assessment_type?: string }
-    if (!platform?.trim() || !assessment_type?.trim()) {
-      throw new Error('platform and assessment_type are required')
-    }
-    const { deleteSolvedAssessment } = await import('./lib/solved-questions-store.js')
-    return deleteSolvedAssessment(platform.trim(), assessment_type.trim())
   })
 
   // ── CV handlers ────────────────────────────────────────────────────────────

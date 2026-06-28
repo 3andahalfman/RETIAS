@@ -81,36 +81,6 @@ interface CV {
   created_at: number
 }
 
-interface AdminOnlineTestCapture {
-  id: string
-  user_id: string
-  user_email: string
-  session_id: string | null
-  test_type: string
-  screenshot_paths: string[]
-  screenshot_count: number
-  ai_answer: string
-  score_accuracy: number | null
-  score_completeness: number | null
-  score_overall: number | null
-  score_notes: string | null
-  created_at: string
-}
-
-interface AdminCaptureStats {
-  totalCaptures: number
-  avgOverallScore: number | null
-  uniqueUsers: number
-}
-
-interface AdminCaptureUserSummary {
-  email: string
-  userId: string
-  captureCount: number
-  avgOverallScore: number | null
-  lastActiveAt: string
-}
-
 interface ElectronAPI {
   startSession: (config: SessionConfig) => void
   stopSession: () => void
@@ -190,53 +160,12 @@ interface ElectronAPI {
   authCheckUsername?: (displayName: string) => Promise<boolean>
   updateDisplayName?: (displayName: string) => Promise<void>
 
-  // Admin: online test screenshot library (Electron-only)
-  adminListScreenshots?: (offset?: number, limit?: number) => Promise<{
-    captures: Array<{
-      id: string
-      user_id: string
-      user_email: string
-      session_id: string | null
-      test_type: string
-      screenshot_paths: string[]
-      screenshot_count: number
-      ai_answer: string
-      score_accuracy: number | null
-      score_completeness: number | null
-      score_overall: number | null
-      score_notes: string | null
-      created_at: string
-    }>
-    stats: { totalCaptures: number; avgOverallScore: number | null; uniqueUsers: number }
-  }>
-  adminGetScreenshotUrl?: (path: string) => Promise<string | null>
-
   // CVs
   saveCv: (name: string, content: string) => Promise<CV>
   listCvs: () => Promise<CV[]>
   deleteCv: (cvId: string) => Promise<void>
 
-  // Admin — online test screenshot library (juliaodaramola@gmail.com only)
-  adminListScreenshots: (offset?: number, limit?: number) => Promise<{
-    captures: AdminOnlineTestCapture[]
-    stats: AdminCaptureStats
-  }>
-  adminScreenshotLibraryOverview: () => Promise<{
-    stats: AdminCaptureStats
-    users: AdminCaptureUserSummary[]
-  }>
-  adminListCapturesForUser: (email: string) => Promise<AdminOnlineTestCapture[]>
-  adminGetScreenshotUrl: (path: string) => Promise<string | null>
-  adminUpsertSolvedQuestions?: (rows: Array<{
-    platform: string
-    assessment_type: string
-    question: string
-    answer: string
-    answer_variants?: string[]
-    paraphrase_enabled: boolean
-    source_capture_id: string | null
-    source_url: string | null
-  }>) => Promise<{ total: number; inserted: number; updated: number }>
+  // Solved Assessment bank (Premium Plus browse)
   listSolvedQuestions?: () => Promise<Array<{
     id: string
     platform: string
@@ -248,8 +177,6 @@ interface ElectronAPI {
     source_url: string | null
     created_at: string
   }>>
-  deleteSolvedQuestions?: (ids: string[]) => Promise<number>
-  deleteSolvedAssessment?: (payload: { platform: string; assessment_type: string }) => Promise<number>
 
   // Auto-Typer
   autoTypeStart?: (opts: {

@@ -114,27 +114,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listCvs: () => ipcRenderer.invoke('cv:list'),
   deleteCv: (cvId: string) => ipcRenderer.invoke('cv:delete', cvId),
 
-  // Admin screenshot library
-  adminListScreenshots: (offset = 0, limit = 50) =>
-    ipcRenderer.invoke('admin:list-screenshots', offset, limit),
-  adminScreenshotLibraryOverview: () => ipcRenderer.invoke('admin:screenshot-library-overview'),
-  adminListCapturesForUser: (email: string) => ipcRenderer.invoke('admin:list-captures-for-user', email),
-  adminGetScreenshotUrl: (path: string) => ipcRenderer.invoke('admin:get-screenshot-url', path),
-  adminUpsertSolvedQuestions: (rows: Array<{
-    platform: string
-    assessment_type: string
-    question: string
-    answer: string
-    answer_variants?: string[]
-    paraphrase_enabled: boolean
-    source_capture_id: string | null
-    source_url: string | null
-  }>) => ipcRenderer.invoke('admin:upsert-solved-questions', rows),
-
   listSolvedQuestions: () => ipcRenderer.invoke('solved:list-questions'),
-  deleteSolvedQuestions: (ids: string[]) => ipcRenderer.invoke('solved:delete-questions', ids),
-  deleteSolvedAssessment: (payload: { platform: string; assessment_type: string }) =>
-    ipcRenderer.invoke('solved:delete-assessment', payload),
 
   // Auto-updater
   onUpdateAvailable: (cb: (version: string) => void) => ipcRenderer.on('update:available', (_e, version) => cb(version)),

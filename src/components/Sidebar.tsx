@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { isAdminEmail } from '../lib/admin'
 import { hasPremiumPlusAccess } from '../lib/premium-access'
 
 export type SidebarItemId =
@@ -11,8 +10,6 @@ export type SidebarItemId =
   | 'cv-manager'
   | 'auto-typer'
   | 'settings'
-  | 'admin-screenshots'
-  | 'admin-solved'
 
 interface SidebarProps {
   activeItem: SidebarItemId
@@ -36,7 +33,6 @@ interface NavItem {
 interface NavSection {
   label: string
   items: NavItem[]
-  adminOnly?: boolean
 }
 
 const NAV_SECTIONS: NavSection[] = [
@@ -61,14 +57,6 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: 'Admin',
-    adminOnly: true,
-    items: [
-      { id: 'admin-screenshots', label: 'Assessment Archive', icon: '🗂️' },
-      { id: 'admin-solved', label: 'Solved Bank', icon: '📚' },
-    ],
-  },
-  {
     label: 'Account',
     items: [{ id: 'settings', label: 'Settings', icon: '⚙' }],
   },
@@ -90,8 +78,7 @@ export default function Sidebar({ activeItem, user, onNavigate, onLogout, onUpgr
   })
 
   const initials = (user.display_name || user.email || '?').slice(0, 2).toUpperCase()
-  const showAdmin = isAdminEmail(user.email)
-  const sections = NAV_SECTIONS.filter((section) => !section.adminOnly || showAdmin)
+  const sections = NAV_SECTIONS
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
