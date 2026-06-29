@@ -42,13 +42,33 @@ const UPDATE_CHECK_TIMEOUT_MS = 20_000
 let updateCheckStatus: UpdateCheckStatus = app.isPackaged ? 'checking' : 'skipped'
 let updateAvailableVersion: string | null = null
 let startupUpdateCheckPromise: Promise<void> | null = null
+let updateDownloadInProgress = false
+let updateDownloaded = false
+
+type UpdateDownloadPhase = 'idle' | 'downloading' | 'ready'
+
+function getUpdateDownloadPhase(): UpdateDownloadPhase {
+  if (updateDownloaded) return 'ready'
+  if (updateDownloadInProgress) return 'downloading'
+  return 'idle'
+}
+
+function buildUpdateCheckResponse() {
+  return {
+    status: updateCheckStatus,
+    version: updateAvailableVersion,
+    downloadPhase: getUpdateDownloadPhase(),
+  }
+}
+
+function notifyUpdateDownloaded() {
+  if (!overlayWindow || overlayWindow.isDestroyed()) return
+  overlayWindow.webContents.send('update:downloaded')
+}
 
 function sendUpdateCheckStatus() {
   if (!overlayWindow || overlayWindow.isDestroyed()) return
-  overlayWindow.webContents.send('update:check-status', {
-    status: updateCheckStatus,
-    version: updateAvailableVersion,
-  })
+  overlayWindow.webContents.send('update:check-status', buildUpdateCheckResponse())
 }
 
 function setUpdateCheckStatus(status: UpdateCheckStatus, version?: string | null) {
@@ -96,6 +116,15 @@ async function runStartupUpdateCheck(force = false): Promise<void> {
     return
   }
 
+  // Already downloaded this session — don't re-check or re-download.
+  if (updateDownloaded) {
+    if (updateCheckStatus !== 'available') {
+      setUpdateCheckStatus('available', updateAvailableVersion)
+    }
+    notifyUpdateDownloaded()
+    return
+  }
+
   if (startupUpdateCheckPromise && !force) return startupUpdateCheckPromise
 
   startupUpdateCheckPromise = (async () => {
@@ -135,18 +164,28 @@ function setupAutoUpdater() {
   autoUpdater.autoInstallOnAppQuit = true
 
   autoUpdater.on('update-available', (info) => {
+    if (info.version) updateAvailableVersion = info.version
+    if (updateDownloaded) {
+      notifyUpdateDownloaded()
+      return
+    }
+    if (updateDownloadInProgress) return
     overlayWindow?.webContents.send('update:available', info.version)
   })
 
   autoUpdater.on('download-progress', (progress) => {
+    updateDownloadInProgress = true
     overlayWindow?.webContents.send('update:progress', Math.round(progress.percent))
   })
 
   autoUpdater.on('update-downloaded', () => {
-    overlayWindow?.webContents.send('update:downloaded')
+    updateDownloadInProgress = false
+    updateDownloaded = true
+    notifyUpdateDownloaded()
   })
 
   autoUpdater.on('error', (err) => {
+    if (updateDownloadInProgress) updateDownloadInProgress = false
     logger.warn('[Updater] Error:', err.message)
     console.warn('[Updater] Error:', err.message)
   })
@@ -799,19 +838,23 @@ async function bootstrap() {
   })
 
   // ── Auto-updater (IPC — gate check runs at window creation above) ───────────
-  ipcMain.handle('update:get-check-status', () => ({
-    status: updateCheckStatus,
-    version: updateAvailableVersion,
-  }))
+  ipcMain.handle('update:get-check-status', () => buildUpdateCheckResponse())
 
   ipcMain.handle('update:retry-check', async () => {
+    if (updateDownloaded) return buildUpdateCheckResponse()
     startupUpdateCheckPromise = null
     await runStartupUpdateCheck(true)
-    return { status: updateCheckStatus, version: updateAvailableVersion }
+    return buildUpdateCheckResponse()
   })
 
   ipcMain.on('update:download', () => {
-    if (app.isPackaged) autoUpdater.downloadUpdate().catch(console.error)
+    if (!app.isPackaged || updateDownloadInProgress || updateDownloaded) return
+    updateDownloadInProgress = true
+    autoUpdater.downloadUpdate().catch((err: Error) => {
+      updateDownloadInProgress = false
+      logger.warn('[Updater] downloadUpdate failed:', err.message)
+      console.error('[Updater] downloadUpdate failed:', err)
+    })
   })
 
   ipcMain.on('update:install', () => {

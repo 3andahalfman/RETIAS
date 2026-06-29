@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 export type UpdatePhase = 'idle' | 'available' | 'downloading' | 'ready'
+export type UpdateDownloadPhase = 'idle' | 'downloading' | 'ready'
 
 export interface NotificationState {
   phase: UpdatePhase
@@ -46,6 +47,8 @@ export function initNotificationListeners() {
   if (!api) return
 
   api.onUpdateAvailable?.((version: string) => {
+    // Don't regress after download started or finished (avoids re-download UI loop).
+    if (state.phase === 'downloading' || state.phase === 'ready') return
     if (!localStorage.getItem(UPDATE_KEY)) {
       localStorage.setItem(UPDATE_KEY, JSON.stringify({ version, since: Date.now() }))
     }
@@ -78,8 +81,43 @@ export function dismissNotification() {
 }
 
 export function downloadUpdate() {
+  if (state.phase === 'downloading' || state.phase === 'ready') return
   window.electronAPI?.downloadUpdate?.()
   patch({ phase: 'downloading', progress: 0, dismissed: false })
+}
+
+/** Sync renderer phase from main-process download state (e.g. after reload or missed IPC). */
+export function syncUpdateDownloadState(result: {
+  downloadPhase?: UpdateDownloadPhase
+  version?: string | null
+}) {
+  if (result.downloadPhase === 'ready') {
+    patch({
+      phase: 'ready',
+      version: result.version ?? state.version,
+      dismissed: false,
+      unread: true,
+    })
+    return
+  }
+  if (result.downloadPhase === 'downloading') {
+    patch({
+      phase: 'downloading',
+      version: result.version ?? state.version,
+      dismissed: false,
+      unread: true,
+    })
+    return
+  }
+  if (result.version && state.phase === 'idle') {
+    patch({
+      phase: 'available',
+      version: result.version,
+      progress: 0,
+      dismissed: false,
+      unread: true,
+    })
+  }
 }
 
 export function installUpdate() {

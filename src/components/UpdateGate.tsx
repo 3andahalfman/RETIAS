@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import WindowControls from './WindowControls'
 import {
   downloadUpdate,
   initNotificationListeners,
   installUpdate,
+  syncUpdateDownloadState,
   useAppNotifications,
 } from '../lib/notification-store'
 
@@ -16,14 +18,53 @@ function passesGate(status: UpdateCheckStatus): boolean {
   return status === 'skipped' || status === 'up-to-date'
 }
 
+function UpdateGateShell({
+  children,
+  className = 'auth-loading-root',
+  onDock,
+}: {
+  children: ReactNode
+  className?: string
+  onDock: () => void
+}) {
+  return (
+    <div className={`app-root ${className}`} style={{ position: 'relative' }}>
+      <div className="login-win-controls">
+        <WindowControls
+          onDock={onDock}
+          showNotifications={false}
+          dockTitle="Minimise to dock"
+        />
+      </div>
+      {children}
+    </div>
+  )
+}
+
 export default function UpdateGate({ onPassed }: UpdateGateProps) {
   const [checkStatus, setCheckStatus] = useState<UpdateCheckStatus>('checking')
   const [version, setVersion] = useState('')
+  const [isDocked, setIsDocked] = useState(false)
   const { phase, progress } = useAppNotifications()
 
-  const applyCheckResult = useCallback((result: { status: UpdateCheckStatus; version?: string | null }) => {
+  const handleDock = () => {
+    setIsDocked(true)
+    window.electronAPI?.dockWindow()
+  }
+
+  const handleUndock = () => {
+    setIsDocked(false)
+    window.electronAPI?.undockWindow()
+  }
+
+  const applyCheckResult = useCallback((result: {
+    status: UpdateCheckStatus
+    version?: string | null
+    downloadPhase?: 'idle' | 'downloading' | 'ready'
+  }) => {
     setCheckStatus(result.status)
     if (result.version) setVersion(result.version)
+    syncUpdateDownloadState(result)
     if (passesGate(result.status)) onPassed()
   }, [onPassed])
 
@@ -48,20 +89,36 @@ export default function UpdateGate({ onPassed }: UpdateGateProps) {
       .catch(() => setCheckStatus('error'))
   }
 
+  if (isDocked) {
+    return (
+      <div className="app-root docked">
+        <div
+          className="docked-content"
+          onClick={handleUndock}
+          onMouseEnter={() => window.electronAPI?.setIgnoreMouseEvents(false)}
+          onMouseLeave={() => window.electronAPI?.setIgnoreMouseEvents(true)}
+          title="Click to expand"
+        >
+          <img className="docked-logo" src="./logo.svg" alt="RETIAS" />
+        </div>
+      </div>
+    )
+  }
+
   // Checking — minimal splash while main process talks to update server
   if (checkStatus === 'checking') {
     return (
-      <div className="app-root auth-loading-root update-gate-root">
+      <UpdateGateShell className="auth-loading-root update-gate-root" onDock={handleDock}>
         <img src="./logo.svg" alt="RETIAS" className="auth-loading-logo" />
         <p className="update-gate-status">Checking for updates…</p>
-      </div>
+      </UpdateGateShell>
     )
   }
 
   // Fail open — offline or server unreachable; user can continue or retry
   if (checkStatus === 'error') {
     return (
-      <div className="app-root auth-loading-root">
+      <UpdateGateShell onDock={handleDock}>
         <div className="force-update-overlay" style={{ position: 'relative', background: 'transparent', backdropFilter: 'none' }}>
           <div className="force-update-card">
             <div className="force-update-icon">⚠️</div>
@@ -82,14 +139,14 @@ export default function UpdateGate({ onPassed }: UpdateGateProps) {
             </button>
           </div>
         </div>
-      </div>
+      </UpdateGateShell>
     )
   }
 
   // Update required — block app until downloaded and installed
   if (checkStatus === 'available') {
     return (
-      <div className="app-root auth-loading-root">
+      <UpdateGateShell onDock={handleDock}>
         <div className="force-update-overlay" style={{ position: 'relative', background: 'transparent', backdropFilter: 'none' }}>
           <div className="force-update-card">
             <div className="force-update-icon">⬆️</div>
@@ -122,7 +179,7 @@ export default function UpdateGate({ onPassed }: UpdateGateProps) {
             )}
           </div>
         </div>
-      </div>
+      </UpdateGateShell>
     )
   }
 

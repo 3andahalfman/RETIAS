@@ -179,9 +179,21 @@ interface ElectronAPI {
   }>>
 
   // Auto-updater
-  getUpdateCheckStatus?: () => Promise<{ status: 'skipped' | 'checking' | 'up-to-date' | 'available' | 'error'; version?: string | null }>
-  onUpdateCheckStatus?: (cb: (result: { status: 'skipped' | 'checking' | 'up-to-date' | 'available' | 'error'; version?: string | null }) => void) => () => void
-  retryUpdateCheck?: () => Promise<{ status: 'skipped' | 'checking' | 'up-to-date' | 'available' | 'error'; version?: string | null }>
+  getUpdateCheckStatus?: () => Promise<{
+    status: 'skipped' | 'checking' | 'up-to-date' | 'available' | 'error'
+    version?: string | null
+    downloadPhase?: 'idle' | 'downloading' | 'ready'
+  }>
+  onUpdateCheckStatus?: (cb: (result: {
+    status: 'skipped' | 'checking' | 'up-to-date' | 'available' | 'error'
+    version?: string | null
+    downloadPhase?: 'idle' | 'downloading' | 'ready'
+  }) => void) => () => void
+  retryUpdateCheck?: () => Promise<{
+    status: 'skipped' | 'checking' | 'up-to-date' | 'available' | 'error'
+    version?: string | null
+    downloadPhase?: 'idle' | 'downloading' | 'ready'
+  }>
   onUpdateAvailable?: (cb: (version: string) => void) => void
   onUpdateProgress?: (cb: (percent: number) => void) => void
   onUpdateDownloaded?: (cb: () => void) => void
