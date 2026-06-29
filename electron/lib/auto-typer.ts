@@ -236,6 +236,35 @@ function shouldTypo(word: string, typoRate: number): boolean {
 }
 
 /**
+ * Index of the first character where `typo` diverges from `correct`. The shared
+ * prefix is left on screen; only the typo suffix is backspaced and retyped.
+ */
+function typoCorrectionStartIndex(correct: string, typo: string): number {
+  const correctChars = Array.from(correct)
+  const typoChars = Array.from(typo)
+  const maxShared = Math.min(correctChars.length, typoChars.length)
+  let i = 0
+  while (i < maxShared && correctChars[i] === typoChars[i]) i++
+  return i
+}
+
+/** US QWERTY shifted punctuation — libnut typeString mishandles these on Windows. */
+const SHIFTED_PUNCT: Record<string, string> = {
+  '!': 'Num1', '@': 'Num2', '#': 'Num3', '$': 'Num4', '%': 'Num5',
+  '^': 'Num6', '&': 'Num7', '*': 'Num8', '(': 'Num9', ')': 'Num0',
+  '_': 'Minus', '+': 'Equal', '{': 'LeftBracket', '}': 'RightBracket',
+  '|': 'Backslash', ':': 'Semicolon', '"': 'Quote', '<': 'Comma',
+  '>': 'Period', '?': 'Slash', '~': 'Grave',
+}
+
+/** US QWERTY unshifted punctuation — explicit keyTap for reliable output. */
+const PLAIN_PUNCT: Record<string, string> = {
+  '-': 'Minus', '=': 'Equal', '[': 'LeftBracket', ']': 'RightBracket',
+  '\\': 'Backslash', ';': 'Semicolon', "'": 'Quote', ',': 'Comma',
+  '.': 'Period', '/': 'Slash', '`': 'Grave',
+}
+
+/**
  * Auto-typer engine. Holds at most one active session at a time; subsequent
  * `start` calls reject if a session is already running.
  *
@@ -313,21 +342,44 @@ export class AutoTyper extends EventEmitter {
       const totalChars = Array.from(text).length
       const tokens = tokenize(text)
 
-      // typeChar abstracts the special-key handling so the typo path and the
-      // normal path share the same keystroke logic.
+      // Explicit key taps for US QWERTY — libnut typeString can duplicate `"`,
+      // leave Shift stuck, or emit wrong glyphs for `-` and other punctuation.
+      const tapKey = async (key: (typeof Key)[keyof typeof Key], shift = false): Promise<void> => {
+        if (shift) {
+          await keyboard.pressKey(Key.LeftShift, key)
+          await keyboard.releaseKey(Key.LeftShift, key)
+        } else {
+          await keyboard.pressKey(key)
+          await keyboard.releaseKey(key)
+        }
+      }
+
       const typeChar = async (ch: string): Promise<void> => {
         if (ch === '\n') {
-          await keyboard.pressKey(Key.Enter)
-          await keyboard.releaseKey(Key.Enter)
+          await tapKey(Key.Enter)
         } else if (ch === '\t') {
-          await keyboard.pressKey(Key.Tab)
-          await keyboard.releaseKey(Key.Tab)
+          await tapKey(Key.Tab)
         } else if (ch === '\r') {
           // Stray CR — \r\n becomes just Enter via the \n branch.
           return
+        } else if (ch === ' ') {
+          await tapKey(Key.Space)
+        } else if (/^[a-zA-Z]$/.test(ch)) {
+          await tapKey(Key[ch.toUpperCase() as keyof typeof Key], ch >= 'A' && ch <= 'Z')
+        } else if (ch >= '0' && ch <= '9') {
+          await tapKey(Key[`Num${ch}` as keyof typeof Key])
+        } else if (ch in SHIFTED_PUNCT) {
+          await tapKey(Key[SHIFTED_PUNCT[ch] as keyof typeof Key], true)
+        } else if (ch in PLAIN_PUNCT) {
+          await tapKey(Key[PLAIN_PUNCT[ch] as keyof typeof Key])
         } else {
+          // Unicode prose (en/em dashes, curly quotes, etc.) — best-effort fallback.
           await keyboard.type(ch)
         }
+      }
+
+      const backspace = async (): Promise<void> => {
+        await tapKey(Key.Backspace)
       }
 
       const perCharDelay = (ch: string): number => {
@@ -344,6 +396,8 @@ export class AutoTyper extends EventEmitter {
       for (const token of tokens) {
         if (session.aborted) break
 
+        let wordCompletedByTypo = false
+
         // ── Typo phase (word tokens only) ─────────────────────────────────
         // Decide per-token whether to inject a typo so the choice always
         // reflects the *current* typoRate (the user may have nudged it
@@ -351,8 +405,12 @@ export class AutoTyper extends EventEmitter {
         if (token.kind === 'word' && shouldTypo(token.text, session.typoRate)) {
           const typo = makeTypo(token.text)
           if (typo !== token.text) {
-            // 1. Type the wrong word
+            const correct = token.text
             const typoChars = Array.from(typo)
+            const fixFrom = typoCorrectionStartIndex(correct, typo)
+            const suffix = Array.from(correct.slice(fixFrom))
+
+            // 1. Type the wrong word (includes the correct shared prefix).
             let typoDone = false
             for (const ch of typoChars) {
               if (session.aborted) { typoDone = false; break }
@@ -375,33 +433,52 @@ export class AutoTyper extends EventEmitter {
               if (session.aborted) break
             }
 
-            // 3. Backspace each character of the wrong word
-            for (let i = 0; i < typoChars.length; i++) {
+            // 3. Backspace only the typo suffix — keep the correct prefix.
+            const backspaces = typoChars.length - fixFrom
+            for (let i = 0; i < backspaces; i++) {
               if (session.aborted) break
               await this.waitWhilePaused(session)
               if (session.aborted) break
               try {
-                await keyboard.pressKey(Key.Backspace)
-                await keyboard.releaseKey(Key.Backspace)
+                await backspace()
               } catch (err) {
                 this.emitError(totalChars, err)
                 return
               }
-              // Backspaces are typically a touch faster than typing, but
-              // still jittered so they don't all fire at exactly the same
-              // cadence.
               await sleep(35 + Math.random() * 70, session)
             }
             if (session.aborted) break
 
-            // 4. Small pause before the correct retry, then fall through to
-            //    the normal per-character typing loop below.
+            // 4. Small pause, then type the correct suffix in place.
             await sleep(60 + Math.random() * 160, session)
             if (session.aborted) break
+
+            for (const ch of suffix) {
+              if (session.aborted) break
+              await this.waitWhilePaused(session)
+              if (session.aborted) break
+              try {
+                await typeChar(ch)
+              } catch (err) {
+                this.emitError(totalChars, err)
+                return
+              }
+              session.charsTyped += 1
+              this.maybeEmitProgress(totalChars)
+              await sleep(perCharDelay(ch), session)
+            }
+            if (session.aborted) break
+
+            // Count the shared prefix toward progress (already on screen).
+            session.charsTyped += fixFrom
+            this.maybeEmitProgress(totalChars)
+            wordCompletedByTypo = true
           }
         }
 
-        // ── Normal typing path (used for delims and for the corrected word) ──
+        if (wordCompletedByTypo) continue
+
+        // ── Normal typing path (delims and words without a typo injection) ──
         const chars = Array.from(token.text)
         for (const ch of chars) {
           if (session.aborted) break
