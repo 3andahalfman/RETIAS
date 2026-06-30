@@ -23,6 +23,9 @@ function createIpcFanout(channel: string) {
 }
 
 const llmDoneFanout = createIpcFanout('llm:done')
+const updateAvailableFanout = createIpcFanout('update:available')
+const updateProgressFanout = createIpcFanout('update:progress')
+const updateDownloadedFanout = createIpcFanout('update:downloaded')
 
 // Expose safe IPC bridge to renderer process
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -151,9 +154,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('update:check-status', handler)
   },
   retryUpdateCheck: () => ipcRenderer.invoke('update:retry-check'),
-  onUpdateAvailable: (cb: (version: string) => void) => ipcRenderer.on('update:available', (_e, version) => cb(version)),
-  onUpdateProgress: (cb: (percent: number) => void) => ipcRenderer.on('update:progress', (_e, percent) => cb(percent)),
-  onUpdateDownloaded: (cb: () => void) => ipcRenderer.on('update:downloaded', () => cb()),
+  onUpdateAvailable: (cb: (version: string) => void) => updateAvailableFanout.subscribe(cb),
+  onUpdateProgress: (cb: (percent: number) => void) => updateProgressFanout.subscribe(cb),
+  onUpdateDownloaded: (cb: () => void) => updateDownloadedFanout.subscribe(cb),
   downloadUpdate: () => ipcRenderer.send('update:download'),
   installUpdate: () => ipcRenderer.send('update:install'),
 

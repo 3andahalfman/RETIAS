@@ -39,16 +39,25 @@ export function getNotificationState(): NotificationState {
   return state
 }
 
+/** Reconcile with main when progress hits 100% but update:downloaded was missed. */
+function syncReadyFromMain() {
+  window.electronAPI?.getUpdateCheckStatus?.()
+    .then((result) => {
+      if (result?.downloadPhase === 'ready') syncUpdateDownloadState(result)
+    })
+    .catch(() => {})
+}
+
 export function initNotificationListeners() {
   if (initialized) return
-  initialized = true
-
   const api = window.electronAPI
   if (!api) return
+  initialized = true
 
   api.onUpdateAvailable?.((version: string) => {
     // Don't regress after download started or finished (avoids re-download UI loop).
     if (state.phase === 'downloading' || state.phase === 'ready') return
+    if (state.phase === 'available' && state.version === version) return
     if (!localStorage.getItem(UPDATE_KEY)) {
       localStorage.setItem(UPDATE_KEY, JSON.stringify({ version, since: Date.now() }))
     }
@@ -62,11 +71,16 @@ export function initNotificationListeners() {
   })
 
   api.onUpdateProgress?.((pct: number) => {
-    patch({ phase: 'downloading', progress: pct, dismissed: false, unread: true })
+    if (state.phase === 'ready') return
+    // Monotonic progress within a download — electron-updater can emit a second
+    // 0→100 sequence if a duplicate download starts; ignore regressions.
+    const next = state.phase === 'downloading' ? Math.max(state.progress, pct) : pct
+    patch({ phase: 'downloading', progress: next, dismissed: false, unread: true })
+    if (next >= 100) syncReadyFromMain()
   })
 
   api.onUpdateDownloaded?.(() => {
-    patch({ phase: 'ready', dismissed: false, unread: true })
+    patch({ phase: 'ready', progress: 100, dismissed: false, unread: true })
   })
 }
 
@@ -82,8 +96,8 @@ export function dismissNotification() {
 
 export function downloadUpdate() {
   if (state.phase === 'downloading' || state.phase === 'ready') return
-  window.electronAPI?.downloadUpdate?.()
   patch({ phase: 'downloading', progress: 0, dismissed: false })
+  window.electronAPI?.downloadUpdate?.()
 }
 
 /** Sync renderer phase from main-process download state (e.g. after reload or missed IPC). */
@@ -94,6 +108,7 @@ export function syncUpdateDownloadState(result: {
   if (result.downloadPhase === 'ready') {
     patch({
       phase: 'ready',
+      progress: 100,
       version: result.version ?? state.version,
       dismissed: false,
       unread: true,
@@ -101,6 +116,7 @@ export function syncUpdateDownloadState(result: {
     return
   }
   if (result.downloadPhase === 'downloading') {
+    if (state.phase === 'ready') return
     patch({
       phase: 'downloading',
       version: result.version ?? state.version,
@@ -126,7 +142,7 @@ export function installUpdate() {
 
 export function subscribeNotifications(fn: Listener) {
   listeners.add(fn)
-  return () => listeners.delete(fn)
+  return () => { listeners.delete(fn) }
 }
 
 /** Shared app-update notification state (auto-updater). */

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import WindowControls from './WindowControls'
 import {
   downloadUpdate,
-  initNotificationListeners,
   installUpdate,
   syncUpdateDownloadState,
   useAppNotifications,
@@ -69,7 +68,6 @@ export default function UpdateGate({ onPassed }: UpdateGateProps) {
   }, [onPassed])
 
   useEffect(() => {
-    initNotificationListeners()
     const api = window.electronAPI
     if (!api?.getUpdateCheckStatus) {
       onPassed()
@@ -81,6 +79,20 @@ export default function UpdateGate({ onPassed }: UpdateGateProps) {
     const unsub = api.onUpdateCheckStatus?.(applyCheckResult)
     return () => unsub?.()
   }, [applyCheckResult, onPassed])
+
+  // Poll main process when progress hits 100% but update:downloaded was missed.
+  useEffect(() => {
+    if (phase !== 'downloading' || progress < 100) return
+    let cancelled = false
+    const poll = () => {
+      window.electronAPI?.getUpdateCheckStatus?.()
+        .then((result) => { if (!cancelled) syncUpdateDownloadState(result) })
+        .catch(() => {})
+    }
+    poll()
+    const id = window.setInterval(poll, 400)
+    return () => { cancelled = true; window.clearInterval(id) }
+  }, [phase, progress])
 
   const handleRetry = () => {
     setCheckStatus('checking')
@@ -160,11 +172,13 @@ export default function UpdateGate({ onPassed }: UpdateGateProps) {
               </>
             ) : phase === 'downloading' ? (
               <div className="force-update-progress-wrap">
-                <p className="force-update-body" style={{ marginBottom: 0 }}>Downloading update…</p>
+                <p className="force-update-body" style={{ marginBottom: 0 }}>
+                  {progress >= 100 ? 'Preparing update…' : 'Downloading update…'}
+                </p>
                 <div className="update-banner-bar">
-                  <div className="update-banner-fill" style={{ width: `${progress}%` }} />
+                  <div className="update-banner-fill" style={{ width: `${Math.min(progress, 100)}%` }} />
                 </div>
-                <span className="force-update-pct">{progress}%</span>
+                <span className="force-update-pct">{Math.min(progress, 100)}%</span>
               </div>
             ) : (
               <>

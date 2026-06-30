@@ -44,6 +44,7 @@ let updateAvailableVersion: string | null = null
 let startupUpdateCheckPromise: Promise<void> | null = null
 let updateDownloadInProgress = false
 let updateDownloaded = false
+let updateDownloadPromise: Promise<unknown> | null = null
 
 type UpdateDownloadPhase = 'idle' | 'downloading' | 'ready'
 
@@ -63,7 +64,10 @@ function buildUpdateCheckResponse() {
 
 function notifyUpdateDownloaded() {
   if (!overlayWindow || overlayWindow.isDestroyed()) return
+  // Dual-channel: fire-and-forget event plus durable check-status sync so the
+  // renderer can recover if it missed update:downloaded (e.g. late listener attach).
   overlayWindow.webContents.send('update:downloaded')
+  sendUpdateCheckStatus()
 }
 
 function sendUpdateCheckStatus() {
@@ -169,7 +173,7 @@ function setupAutoUpdater() {
       notifyUpdateDownloaded()
       return
     }
-    if (updateDownloadInProgress) return
+    if (updateDownloadInProgress || updateDownloadPromise) return
     overlayWindow?.webContents.send('update:available', info.version)
   })
 
@@ -181,6 +185,10 @@ function setupAutoUpdater() {
   autoUpdater.on('update-downloaded', () => {
     updateDownloadInProgress = false
     updateDownloaded = true
+    updateDownloadPromise = null
+    if (updateCheckStatus !== 'available') {
+      setUpdateCheckStatus('available', updateAvailableVersion)
+    }
     notifyUpdateDownloaded()
   })
 
@@ -850,13 +858,19 @@ async function bootstrap() {
   })
 
   ipcMain.on('update:download', () => {
-    if (!app.isPackaged || updateDownloadInProgress || updateDownloaded) return
+    if (!app.isPackaged || updateDownloaded) return
+    // Single in-flight download per session — ignore duplicate IPC while active.
+    if (updateDownloadInProgress || updateDownloadPromise) return
     updateDownloadInProgress = true
-    autoUpdater.downloadUpdate().catch((err: Error) => {
-      updateDownloadInProgress = false
-      logger.warn('[Updater] downloadUpdate failed:', err.message)
-      console.error('[Updater] downloadUpdate failed:', err)
-    })
+    sendUpdateCheckStatus()
+    updateDownloadPromise = autoUpdater.downloadUpdate()
+      .catch((err: Error) => {
+        updateDownloadInProgress = false
+        updateDownloadPromise = null
+        logger.warn('[Updater] downloadUpdate failed:', err.message)
+        console.error('[Updater] downloadUpdate failed:', err)
+        sendUpdateCheckStatus()
+      })
   })
 
   ipcMain.on('update:install', () => {
