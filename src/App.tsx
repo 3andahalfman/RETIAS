@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import Dashboard from './components/Dashboard'
 import LoginPage from './components/LoginPage'
 import SetupWizard, { SessionConfig } from './components/SetupWizard'
+import MeetingAssistSetup from './components/MeetingAssistSetup'
 import MockInterviewSetup from './components/MockInterviewSetup'
 import OnlineTestSetup from './components/OnlineTestSetup'
 import SolvedTestPage from './components/SolvedTestPage'
@@ -20,12 +21,14 @@ import CvManager from './components/CvManager'
 import Settings, { loadSettings } from './components/Settings'
 import { isAdminEmail } from './lib/admin'
 import { hasPremiumPlusAccess } from './lib/premium-access'
+import { getAssessmentTypeLabel } from './lib/assessment-types'
+import { getMeetingTypeLabel } from './lib/meeting-types'
 import { invalidateSupabaseSessionSync } from './lib/supabase'
 import PricingPage from './components/PricingPage'
 import AutoTyper from './components/AutoTyper'
 import './index.css'
 
-type View = 'dashboard' | 'setup' | 'mock-interview' | 'past-sessions' | 'session' | 'online-test' | 'solve-test' | 'cv-manager' | 'auto-typer' | 'settings' | 'pricing'
+type View = 'dashboard' | 'setup' | 'mock-interview' | 'meeting-setup' | 'past-sessions' | 'session' | 'online-test' | 'solve-test' | 'cv-manager' | 'auto-typer' | 'settings' | 'pricing'
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -41,6 +44,7 @@ export default function App() {
   const [isStarted, setIsStarted] = useState(false)
   const [micActive, setMicActive] = useState(true)
   const [isOnlineTest, setIsOnlineTest] = useState(false)
+  const [isMeeting, setIsMeeting] = useState(false)
   const [captureQueue, setCaptureQueue] = useState<string[]>([])
   const [isAnalysingCaptures, setIsAnalysingCaptures] = useState(false)
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null)
@@ -167,26 +171,31 @@ export default function App() {
   const handleCreateSession = (config: SessionConfig) => {
     const appSettings = loadSettings()
     let aiModel = config.aiModel || appSettings.aiModel
-    // Opus 4.5 is gated to premium — silently downgrade for free users so the
-    // session still works even if the option was somehow selected.
     if (aiModel === 'claude-opus-4-5' && !user?.is_premium) {
       aiModel = 'claude-sonnet-4-6'
     }
+    const meeting = config.sessionMode === 'meeting'
     setSessionConfig({ ...config, aiModel })
     setView('session')
     window.electronAPI?.startSession({
       resumeText: config.resumeText,
-      targetRole: config.targetRole || config.jobDescription || 'Software Engineer',
+      targetRole: config.targetRole || config.meetingRole || config.jobDescription || 'Software Engineer',
       company: config.company,
       interviewType: config.interviewType || 'SWE',
       jobDescription: config.jobDescription,
       extraContext: config.extraContext,
       language: config.language,
       aiModel,
+      sessionMode: config.sessionMode,
+      meetingType: config.meetingType,
+      meetingRole: config.meetingRole,
+      meetingContext: config.meetingContext,
     })
     setSessionActive(true)
     setIsStarted(false)
-    setMicActive(true)
+    setMicActive(!meeting)
+    setIsMeeting(meeting)
+    setIsOnlineTest(false)
   }
 
   const handleCreateOnlineTest = (testType: string) => {
@@ -195,13 +204,14 @@ export default function App() {
     if (aiModel === 'claude-opus-4-5' && !user?.is_premium) {
       aiModel = 'claude-sonnet-4-6'
     }
-    setSessionConfig({ aiModel } as SessionConfig)
+    setSessionConfig({ testType, aiModel, sessionType: 'interview', company: '', jobUrl: '', jobDescription: '', resumeText: '', language: '', extraContext: '', autoGenerate: false })
     setView('session')
     window.electronAPI?.startSession({ testType, aiModel })
     setSessionActive(true)
     setIsStarted(true) // auto-start — no intro needed
     setMicActive(false) // no mic for online tests
     setIsOnlineTest(true)
+    setIsMeeting(false)
   }
 
   const handleStartSession = () => setIsStarted(true)
@@ -226,6 +236,7 @@ export default function App() {
     setSessionActive(false)
     setIsStarted(false)
     setIsOnlineTest(false)
+    setIsMeeting(false)
     setCaptureQueue([])
     setIsAnalysingCaptures(false)
     setView('dashboard')
@@ -264,7 +275,7 @@ export default function App() {
   }
 
   // Docked non-session views
-  if (isDocked && (view === 'setup' || view === 'dashboard' || view === 'mock-interview' || view === 'online-test' || view === 'solve-test' || view === 'past-sessions' || view === 'cv-manager' || view === 'auto-typer' || view === 'settings' || view === 'pricing')) {
+  if (isDocked && (view === 'setup' || view === 'dashboard' || view === 'mock-interview' || view === 'meeting-setup' || view === 'online-test' || view === 'solve-test' || view === 'past-sessions' || view === 'cv-manager' || view === 'auto-typer' || view === 'settings' || view === 'pricing')) {
     return (
       <div className="app-root docked">
         <div
@@ -282,6 +293,7 @@ export default function App() {
 
   const handleSidebarNavigate = (item: SidebarItemId) => {
     if (item === 'real-interview') setView('setup')
+    else if (item === 'meeting-assist') setView('meeting-setup')
     else if (item === 'mock-interview') setView('mock-interview')
     else if (item === 'online-assessment') setView('online-test')
     else if (item === 'solved-assessment') setView('solve-test')
@@ -343,6 +355,23 @@ export default function App() {
               onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
               cvs={cvs}
               user={user}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (view === 'meeting-setup') {
+    return (
+      <div className="app-root">
+        <div className="page-layout">
+          <Sidebar activeItem="meeting-assist" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={() => setView('pricing')} />
+          <div className="page-main">
+            <MeetingAssistSetup
+              onCreateSession={handleCreateSession}
+              onBack={() => setView('dashboard')}
+              onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
             />
           </div>
         </div>
@@ -477,7 +506,11 @@ export default function App() {
 
   return (
     <div className={`app-root session ${isDocked ? 'docked' : ''}`}>
-      <AudioCapture active={isStarted && sessionActive && micActive} />
+      <AudioCapture
+        active={isStarted && sessionActive && !isOnlineTest && (isMeeting || micActive)}
+        micEnabled={micActive}
+        systemEnabled={isMeeting || micActive}
+      />
 
       {isDocked && (
         <div
@@ -488,7 +521,7 @@ export default function App() {
           title="Click to expand"
         >
           <img className="docked-logo" src="./logo.svg" alt="Logo" />
-          <div className={`docked-bars ${isStarted && sessionActive && micActive ? 'active' : ''}`}>
+          <div className={`docked-bars ${isStarted && sessionActive && (isMeeting || micActive) ? 'active' : ''}`}>
             <span /><span /><span />
           </div>
         </div>
@@ -506,8 +539,16 @@ export default function App() {
           onToggleDock={toggleDock}
           convState={convState}
           isPremium={user?.is_premium ?? false}
-          sessionCompany={sessionConfig?.company}
-          sessionRole={sessionConfig?.targetRole || sessionConfig?.jobDescription}
+          sessionCompany={
+            isOnlineTest ? 'Online Assessment' : isMeeting ? 'Meeting Assist' : sessionConfig?.company
+          }
+          sessionRole={
+            isOnlineTest && sessionConfig?.testType
+              ? getAssessmentTypeLabel(sessionConfig.testType)
+              : isMeeting
+                ? `${getMeetingTypeLabel(sessionConfig?.meetingType)} — ${sessionConfig?.meetingRole || sessionConfig?.targetRole || ''}`
+                : sessionConfig?.targetRole || sessionConfig?.jobDescription
+          }
           aiModel={sessionConfig?.aiModel}
           countdownSec={!user?.is_premium && !isOnlineTest ? 10 * 60 : undefined}
         />
@@ -518,6 +559,8 @@ export default function App() {
           <AnswerPanel
             isPremium={user?.is_premium ?? false}
             isOnlineTest={isOnlineTest}
+            isMeeting={isMeeting}
+            meetingType={sessionConfig?.meetingType}
             isStarted={isStarted}
             captureQueue={captureQueue}
             onCapture={handleCapture}

@@ -14,6 +14,12 @@ interface SessionConfig {
   language?: string
   extraContext?: string
   userId?: string
+  testType?: string
+  aiModel?: string
+  sessionMode?: 'interview' | 'meeting' | 'online-test'
+  meetingType?: 'standup' | 'general'
+  meetingRole?: string
+  meetingContext?: string
 }
 
 interface PastSession {

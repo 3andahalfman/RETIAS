@@ -620,9 +620,10 @@ export class LLMWorker {
     if (this.isGenerating) this.abortCurrent()
 
     const questionType = 'general'
+    const cardType = this.sessionTestType ?? questionType
 
     // Use screen:card so context-builder doesn't treat this as an interview question
-    this.ipcBus.emit('screen:card', 'Screen Analysis', questionType)
+    this.ipcBus.emit('screen:card', 'Screen Analysis', cardType)
 
     this.isGenerating = true
     let fullResponse = ''
@@ -703,7 +704,8 @@ export class LLMWorker {
 
   private async analyseScreenMulti(images: string[]) {
     if (this.isGenerating) this.abortCurrent()
-    this.ipcBus.emit('screen:card', `Screen Analysis (${images.length} screenshots)`, 'general')
+    const cardType = this.sessionTestType ?? 'general'
+    this.ipcBus.emit('screen:card', `Screen Analysis (${images.length} screenshots)`, cardType)
     this.isGenerating = true
     let fullResponse = ''
 
@@ -793,7 +795,8 @@ export class LLMWorker {
       ?? 'You are an expert AI assistant. Answer the user\'s question clearly, concisely, and accurately.'
 
     const shortTitle = prompt.length > 60 ? prompt.slice(0, 57) + '…' : prompt
-    this.ipcBus.emit('screen:card', shortTitle, 'manual')
+    const cardType = this.sessionTestType ?? 'manual'
+    this.ipcBus.emit('screen:card', shortTitle, cardType)
 
     this.isGenerating = true
     let fullResponse = ''

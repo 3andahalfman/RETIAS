@@ -9,6 +9,8 @@ import 'katex/dist/katex.min.css'
 import { AutoTypeHeaderButton, AutoTypeStatusStrip } from './InlineAutoTyper'
 import AnswerSelectionToolbar from './AnswerSelectionToolbar'
 import { replacePlainSelectionInMarkdown } from '../lib/markdown-selection'
+import { displayQuestionText } from '../lib/question-text'
+import { getMeetingPromptLabel } from '../lib/meeting-types'
 import { useTextSelection } from '../lib/use-text-selection'
 
 interface AnswerEntry {
@@ -24,6 +26,8 @@ const FONT_SIZES = [13, 15, 17, 19]
 interface Props {
   isPremium?: boolean
   isOnlineTest?: boolean
+  isMeeting?: boolean
+  meetingType?: 'standup' | 'general'
   isStarted?: boolean
   captureQueue?: string[]
   onCapture?: () => void
@@ -37,6 +41,8 @@ interface Props {
 export default function AnswerPanel({
   isPremium = false,
   isOnlineTest = false,
+  isMeeting = false,
+  meetingType,
   isStarted = false,
   captureQueue = [],
   onCapture,
@@ -128,6 +134,7 @@ export default function AnswerPanel({
   }, [answers, currentIdx])
 
   const current = currentIdx >= 0 ? answers[currentIdx] : null
+  const displayQuestion = current ? displayQuestionText(current.question) : ''
 
   // Capture the latest answer at click-time (not render-time) so the
   // Auto-Typer always grabs whatever's currently on screen, including text
@@ -272,7 +279,7 @@ export default function AnswerPanel({
         Analyse All →
       </button>
     </>
-  ) : (
+  ) : isMeeting ? null : (
     <button
       type="button"
       className={`panel-analyse-btn${analysing ? ' loading' : ''}${!isPremium ? ' locked' : ''}`}
@@ -338,18 +345,25 @@ export default function AnswerPanel({
 
       <div className="answer-content" ref={scrollRef}>
         {!current ? (
-          <p className="panel-placeholder">AI answers will appear here when questions are detected…</p>
+          <p className="panel-placeholder">
+            {isMeeting
+              ? 'Talking points will appear here when meeting prompts are detected…'
+              : 'AI answers will appear here when questions are detected…'}
+          </p>
         ) : (
           <>
-            {current.question && (
+            {isMeeting && (
+              <div className="answer-meeting-label">{getMeetingPromptLabel(meetingType)}</div>
+            )}
+            {displayQuestion && (
               <div className="answer-question">
                 <span className="answer-question-icon">🎯</span>
-                {current.question}
+                {displayQuestion}
               </div>
             )}
             {(current.answer || current.generating) && (
               <div className="answer-body">
-                <div className="answer-label"><span>⭐</span> Answer</div>
+                <div className="answer-label"><span>{isMeeting ? '💬' : '⭐'}</span> {isMeeting ? 'Talking points' : 'Answer'}</div>
                 <div
                   ref={answerTextRef}
                   className={`answer-text${selectionToolsEnabled ? ' answer-text--selectable' : ''}`}

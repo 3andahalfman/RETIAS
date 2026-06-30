@@ -1,5 +1,7 @@
 import crypto from 'node:crypto'
 import { IpcBus, SessionConfig } from '../ipc-bus.js'
+import { qaCategoryType } from '../lib/assessment-types.js'
+import { MEETING_ASSIST_COMPANY } from '../lib/meeting-types.js'
 import { createSession, endSession, addTranscriptLine, addQA } from '../lib/session-store.js'
 
 /**
@@ -17,6 +19,8 @@ import { createSession, endSession, addTranscriptLine, addQA } from '../lib/sess
 export class SessionRecorder {
   private ipcBus: IpcBus
   private sessionId: string | null = null
+  /** Session-level assessment type (online test setup); overrides per-question LLM types. */
+  private sessionTestType: string | null = null
 
   // Q&A accumulation
   private currentQuestion = ''
@@ -27,6 +31,7 @@ export class SessionRecorder {
   private sessionHandler: ((config: SessionConfig) => void) | null = null
   private transcriptHandler: ((text: string, start: number, duration: number, role: 'candidate' | 'interviewer') => void) | null = null
   private contextHandler: ((systemPrompt: string, userMessage: string, question: string, type: string) => void) | null = null
+  private screenCardHandler: ((question: string, type: string) => void) | null = null
   private tokenHandler: ((token: string) => void) | null = null
   private doneHandler: (() => void) | null = null
 
@@ -36,13 +41,19 @@ export class SessionRecorder {
     this.sessionHandler = (config: SessionConfig) => {
       const id = crypto.randomUUID()
       this.sessionId = id
+      this.sessionTestType = config.testType ?? null
       this.currentQuestion = ''
       this.currentAnswer = ''
-      const company = config.testType ? 'Online Test' : (config.company || '')
-      const targetRole = config.testType ? config.testType : (config.targetRole || '')
+      let company = config.testType ? 'Online Test' : (config.company || '')
+      let targetRole = config.testType ? config.testType : (config.targetRole || '')
+      if (config.sessionMode === 'meeting') {
+        company = MEETING_ASSIST_COMPANY
+        const typeLabel = config.meetingType === 'standup' ? 'Standup' : 'General Meeting'
+        targetRole = config.meetingRole ? `${config.meetingRole} — ${typeLabel}` : typeLabel
+      }
       createSession(id, company, targetRole, config.userId).catch(console.error)
       this.ipcBus.emit('session:id', id)
-      console.log(`[SessionRecorder] Session started: ${id}`)
+      console.log(`[SessionRecorder] Session started: ${id}${config.testType ? ` (${config.testType})` : ''}`)
     }
 
     this.transcriptHandler = (text: string, _start: number, _duration: number, role: 'candidate' | 'interviewer') => {
@@ -52,7 +63,15 @@ export class SessionRecorder {
 
     this.contextHandler = (_sys: string, _user: string, question: string, type: string) => {
       this.currentQuestion = question
-      this.currentQuestionType = type
+      this.currentQuestionType = qaCategoryType(this.sessionTestType, type)
+      this.currentAnswer = ''
+      this.questionTimestamp = Date.now()
+    }
+
+    // Screen capture / manual prompts bypass context-builder — still persist Q&A for online tests
+    this.screenCardHandler = (question: string, type: string) => {
+      this.currentQuestion = question
+      this.currentQuestionType = qaCategoryType(this.sessionTestType, type)
       this.currentAnswer = ''
       this.questionTimestamp = Date.now()
     }
@@ -77,6 +96,7 @@ export class SessionRecorder {
     this.ipcBus.on('session:started', this.sessionHandler)
     this.ipcBus.on('stt:final', this.transcriptHandler)
     this.ipcBus.on('context:ready', this.contextHandler)
+    this.ipcBus.on('screen:card', this.screenCardHandler)
     this.ipcBus.on('llm:token', this.tokenHandler)
     this.ipcBus.on('llm:done', this.doneHandler)
   }
@@ -86,6 +106,7 @@ export class SessionRecorder {
       endSession(this.sessionId).catch(console.error)
       this.sessionId = null
     }
+    this.sessionTestType = null
     if (this.sessionHandler) {
       this.ipcBus.removeListener('session:started', this.sessionHandler)
       this.sessionHandler = null
@@ -97,6 +118,10 @@ export class SessionRecorder {
     if (this.contextHandler) {
       this.ipcBus.removeListener('context:ready', this.contextHandler)
       this.contextHandler = null
+    }
+    if (this.screenCardHandler) {
+      this.ipcBus.removeListener('screen:card', this.screenCardHandler)
+      this.screenCardHandler = null
     }
     if (this.tokenHandler) {
       this.ipcBus.removeListener('llm:token', this.tokenHandler)

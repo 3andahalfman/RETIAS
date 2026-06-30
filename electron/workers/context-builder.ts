@@ -1,7 +1,7 @@
 import { IpcBus, SessionConfig } from '../ipc-bus.js'
 import { extractContext, makeSessionHash, ExtractedContext } from '../lib/context-extractor.js'
 import { storeProfile, loadProfile } from '../lib/profile-store.js'
-import { buildSystemPrompt, buildUserMessage } from '../lib/prompt-builder.js'
+import { buildSystemPrompt, buildUserMessage, getMeetingAssistPrompt, buildMeetingUserMessage } from '../lib/prompt-builder.js'
 
 /**
  * Context Builder — Phase 5 (Persistent Profile Context)
@@ -67,6 +67,10 @@ export class ContextBuilder {
 
   /** Runs extraction async at session start — result stored for question-time use */
   private async runExtraction(config: SessionConfig): Promise<void> {
+    if (config.sessionMode === 'meeting') {
+      console.log('[ContextBuilder] Meeting mode — skipping resume/JD extraction')
+      return
+    }
     if (!config.resumeText || !config.jobDescription) {
       console.log('[ContextBuilder] No resume/JD provided — skipping extraction')
       return
@@ -117,6 +121,17 @@ export class ContextBuilder {
     const config = this.sessionConfig
     let systemPrompt: string
     let userMessage: string
+
+    if (config?.sessionMode === 'meeting') {
+      const role = config.meetingRole || config.targetRole || 'team member'
+      const meetingType = config.meetingType || 'general'
+      const context = config.meetingContext || config.extraContext || ''
+      systemPrompt = getMeetingAssistPrompt(role, meetingType, context, config.language, config.extraContext)
+      userMessage = buildMeetingUserMessage(question, contextWindow, this.answerHistory)
+      this.ipcBus.emit('context:ready', systemPrompt, userMessage, question, type)
+      console.log('[ContextBuilder] Meeting context assembled for:', question.substring(0, 60))
+      return
+    }
 
     if (this.extractedContext) {
       // ── Structured path (normal) ──────────────────────────────────────────

@@ -5,6 +5,7 @@ export type SidebarItemId =
   | 'dashboard'
   | 'real-interview'
   | 'mock-interview'
+  | 'meeting-assist'
   | 'sessions'
   | 'online-assessment'
   | 'solved-assessment'
@@ -47,6 +48,12 @@ const NAV_SECTIONS: NavSection[] = [
       { id: 'real-interview', label: 'Real Interview', icon: '◫', accent: '#4F80E2' },
       { id: 'mock-interview', label: 'Mock Interview', icon: '◎', accent: '#15CDCA' },
       { id: 'sessions', label: 'Past Sessions', icon: '⏱' },
+    ],
+  },
+  {
+    label: 'Meetings',
+    items: [
+      { id: 'meeting-assist', label: 'Meeting Assist', icon: '🎧', accent: '#6366F1' },
     ],
   },
   {

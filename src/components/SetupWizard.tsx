@@ -32,7 +32,7 @@ interface SetupProps {
 }
 
 export interface SessionConfig {
-  sessionType: 'interview'
+  sessionType: 'interview' | 'meeting' | 'online-test'
   company: string
   jobUrl: string
   jobDescription: string
@@ -43,6 +43,12 @@ export interface SessionConfig {
   aiModel: string
   targetRole?: string
   interviewType?: 'SWE' | 'PM' | 'DS'
+  /** Online Assessment session category (english, coding, …). */
+  testType?: string
+  sessionMode?: 'interview' | 'meeting' | 'online-test'
+  meetingType?: 'standup' | 'general'
+  meetingRole?: string
+  meetingContext?: string
 }
 
 function ValidationModal({ message, onClose }: { message: string; onClose: () => void }) {

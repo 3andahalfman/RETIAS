@@ -3,9 +3,9 @@ import { useEffect, useRef } from 'react'
 /**
  * AudioCapture — Dual Stream Architecture (Hardware Diarization)
  *
- * Captures 2 separate streams to perfectly separate Candidate vs Interviewer:
+ * Captures up to 2 separate streams:
  * 1. Microphone (Candidate)
- * 2. System Audio (Interviewer)
+ * 2. System Audio (Interviewer / meeting participants)
  *
  * Both are processed through parallel 16kHz AudioContexts for high-quality
  * native browser Sinc resampling, then sent via AudioWorklets to the IPC Bus
@@ -13,10 +13,19 @@ import { useEffect, useRef } from 'react'
  */
 
 interface Props {
+  /** Master enable — when false, all capture stops */
   active: boolean
+  /** Capture microphone (default: true when active) */
+  micEnabled?: boolean
+  /** Capture system/loopback audio (default: true when active) */
+  systemEnabled?: boolean
 }
 
-export default function AudioCapture({ active }: Props) {
+export default function AudioCapture({
+  active,
+  micEnabled = true,
+  systemEnabled = true,
+}: Props) {
   const micCtxRef = useRef<AudioContext | null>(null)
   const sysCtxRef = useRef<AudioContext | null>(null)
   const micWorkletRef = useRef<AudioWorkletNode | null>(null)
@@ -27,67 +36,69 @@ export default function AudioCapture({ active }: Props) {
   // STT worker can still transcribe speech (testing / headphone scenarios).
   const sysAudioActiveRef = useRef(false)
 
-  const startedRef = useRef(false)
+  const micRunningRef = useRef(false)
+  const sysRunningRef = useRef(false)
 
   useEffect(() => {
     if (!active) {
-      stopCapture()
+      stopMicCapture()
+      stopSystemCapture()
       return
     }
-    if (!startedRef.current) {
-      startedRef.current = true
-      startCapture()
-    }
-    return () => {
-      stopCapture()
-      startedRef.current = false
-      sysAudioActiveRef.current = false
-    }
-  }, [active])
 
-  async function startCapture() {
+    if (systemEnabled && !sysRunningRef.current) {
+      startSystemCapture()
+    } else if (!systemEnabled && sysRunningRef.current) {
+      stopSystemCapture()
+    }
+
+    if (micEnabled && !micRunningRef.current) {
+      startMicCapture()
+    } else if (!micEnabled && micRunningRef.current) {
+      stopMicCapture()
+    }
+
+    return () => {
+      stopMicCapture()
+      stopSystemCapture()
+    }
+  }, [active, micEnabled, systemEnabled])
+
+  async function startMicCapture() {
+    if (micRunningRef.current) return
     try {
-      // 1. Capture Microphone (Candidate)
       const micStream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: true },
         video: false,
       })
       micStreamRef.current = micStream
-
-      // 2. Capture System/Screen Audio (Interviewer) via getDisplayMedia
-      // Electron intercepts this via setDisplayMediaRequestHandler in main.ts,
-      // auto-selecting the primary screen with WASAPI loopback audio (no picker dialog).
-      let sysStream: MediaStream | null = null
-      try {
-        const displayStream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: true,
-        })
-        // Stop the video track — we only need the loopback audio track
-        displayStream.getVideoTracks().forEach((t) => t.stop())
-        if (displayStream.getAudioTracks().length > 0) {
-          sysStream = displayStream
-          sysStreamRef.current = sysStream
-          sysAudioActiveRef.current = true
-          console.log('[AudioCapture] System audio (loopback) captured ✓')
-        } else {
-          console.warn('[AudioCapture] getDisplayMedia returned no audio tracks — mic fallback active')
-        }
-      } catch (sysErr: any) {
-        console.warn('[AudioCapture] System audio unavailable:', sysErr.message)
-      }
-
-      // 3. Setup Processing Pipelines
       await setupPipeline(micStream, 'mic')
-      if (sysStream) {
-        await setupPipeline(sysStream, 'system')
-      } else {
-        console.warn('[AudioCapture] No system audio — mic-only mode.')
-      }
-
-      console.log('[AudioCapture] ✅ Dual-stream capture started')
+      micRunningRef.current = true
+      console.log('[AudioCapture] Microphone capture started ✓')
     } catch (err: any) {
-      console.error('[AudioCapture] Error:', err.message)
+      console.error('[AudioCapture] Mic error:', err.message)
+    }
+  }
+
+  async function startSystemCapture() {
+    if (sysRunningRef.current) return
+    try {
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
+      })
+      displayStream.getVideoTracks().forEach((t) => t.stop())
+      if (displayStream.getAudioTracks().length > 0) {
+        sysStreamRef.current = displayStream
+        await setupPipeline(displayStream, 'system')
+        sysAudioActiveRef.current = true
+        sysRunningRef.current = true
+        console.log('[AudioCapture] System audio (loopback) captured ✓')
+      } else {
+        console.warn('[AudioCapture] getDisplayMedia returned no audio tracks — mic fallback active')
+      }
+    } catch (sysErr: any) {
+      console.warn('[AudioCapture] System audio unavailable:', sysErr.message)
     }
   }
 
@@ -101,7 +112,7 @@ export default function AudioCapture({ active }: Props) {
 
     const sourceNode = ctx.createMediaStreamSource(stream)
     const workletNode = new AudioWorkletNode(ctx, 'audio-capture-processor')
-    
+
     if (source === 'mic') micWorkletRef.current = workletNode
     else sysWorkletRef.current = workletNode
 
@@ -112,9 +123,6 @@ export default function AudioCapture({ active }: Props) {
       const int16 = new Int16Array(samples)
       if (int16.length === 0) return
 
-      // Send to Electron main via IPC, tagged with source.
-      // If this is mic audio and no system audio was captured (loopback unavailable),
-      // re-label it as 'system' so the STT worker picks it up as interviewer speech.
       const effectiveSource: 'mic' | 'system' =
         source === 'mic' && !sysAudioActiveRef.current ? 'system' : source
 
@@ -126,28 +134,31 @@ export default function AudioCapture({ active }: Props) {
     sourceNode.connect(workletNode)
   }
 
-  function stopCapture() {
+  function stopMicCapture() {
     try {
       micWorkletRef.current?.port.close()
-      sysWorkletRef.current?.port.close()
       micWorkletRef.current?.disconnect()
-      sysWorkletRef.current?.disconnect()
-      
       micStreamRef.current?.getTracks().forEach((t) => t.stop())
-      sysStreamRef.current?.getTracks().forEach((t) => t.stop())
-      
       micCtxRef.current?.close()
+    } catch { /* ignore */ }
+    micWorkletRef.current = null
+    micStreamRef.current = null
+    micCtxRef.current = null
+    micRunningRef.current = false
+  }
+
+  function stopSystemCapture() {
+    try {
+      sysWorkletRef.current?.port.close()
+      sysWorkletRef.current?.disconnect()
+      sysStreamRef.current?.getTracks().forEach((t) => t.stop())
       sysCtxRef.current?.close()
     } catch { /* ignore */ }
-    
-    micWorkletRef.current = null
     sysWorkletRef.current = null
-    micStreamRef.current = null
     sysStreamRef.current = null
-    micCtxRef.current = null
     sysCtxRef.current = null
-    
-    console.log('[AudioCapture] Stopped dual-stream')
+    sysRunningRef.current = false
+    sysAudioActiveRef.current = false
   }
 
   return null

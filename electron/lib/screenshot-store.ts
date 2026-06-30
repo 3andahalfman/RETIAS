@@ -48,6 +48,11 @@ export interface OnlineTestCapture {
   created_at: string
 }
 
+/** Category for grouping/filtering — always prefer user-selected session testType. */
+export function captureAssessmentCategory(capture: Pick<OnlineTestCapture, 'test_type' | 'detected_test_type'>): string {
+  return capture.test_type || capture.detected_test_type || 'general'
+}
+
 export interface StoreCaptureParams {
   userId: string
   userEmail: string

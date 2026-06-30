@@ -201,4 +201,9 @@ interface SessionConfig {
   autoGenerate?: boolean
   jobUrl?: string
   userId?: string
+  testType?: string
+  sessionMode?: 'interview' | 'meeting' | 'online-test'
+  meetingType?: 'standup' | 'general'
+  meetingRole?: string
+  meetingContext?: string
 }

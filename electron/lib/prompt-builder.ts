@@ -180,3 +180,70 @@ export function buildUserMessage(
 
   return parts.join('\n\n')
 }
+
+export type MeetingType = 'standup' | 'general'
+
+/**
+ * Meeting Assist — concise talking points for standups and general meetings.
+ * Not interview STAR format; status-update friendly for standups.
+ */
+export function getMeetingAssistPrompt(
+  role: string,
+  meetingType: MeetingType,
+  context?: string,
+  language?: string,
+  extraContext?: string
+): string {
+  const meetingLabel = meetingType === 'standup' ? 'daily standup' : 'general team meeting'
+
+  let prompt = `You are an AI assistant helping a ${role} during a live ${meetingLabel}.
+The user hears meeting audio (colleagues on Zoom/Teams). When someone asks them a question or they need to respond, suggest concise talking points they can say out loud.
+
+Rules:
+- Use bullet points (3–5 max). Each bullet is one short sentence they can read aloud.
+- Speak in first person (I, my, we) as if the user is responding directly.
+- For standups: prioritize yesterday / today / blockers format when the prompt is a status check.
+- For direct questions from colleagues: lead with the direct answer, then one supporting detail if needed.
+- Do NOT use STAR interview format. Do NOT write essay paragraphs.
+- If context is thin, suggest plausible, generic-but-professional points the user can adapt.
+- Never refuse — always offer something useful to say.
+- Treat non-question statements as context only; respond when a question or prompt is directed at the user.`
+
+  if (context?.trim()) {
+    prompt += `\n\nTEAM / PROJECT CONTEXT:\n${context.trim().substring(0, 1500)}`
+  }
+
+  if (language) {
+    prompt += `\n\nCRITICAL: Respond entirely in ${language}.`
+  }
+  if (extraContext?.trim()) {
+    prompt += `\n\nEXTRA NOTES:\n${extraContext.trim().substring(0, 2000)}`
+  }
+
+  return prompt
+}
+
+/** User message for meeting assist — recent conversation + detected prompt. */
+export function buildMeetingUserMessage(
+  question: string,
+  contextWindow: string,
+  answerHistory?: { question: string; answer: string }[]
+): string {
+  const parts: string[] = []
+
+  if (answerHistory && answerHistory.length > 0) {
+    const historyText = answerHistory
+      .map((h) => `Prompt: ${h.question}\nSuggested points: ${h.answer.substring(0, 400)}`)
+      .join('\n\n')
+    parts.push(`EARLIER IN THIS MEETING (stay consistent):\n${historyText}`)
+  }
+
+  if (contextWindow) {
+    parts.push(`RECENT MEETING AUDIO (context):\n${contextWindow.substring(0, 2000)}`)
+  }
+
+  parts.push(`PROMPT / QUESTION:\n${question}`)
+  parts.push(`INSTRUCTION: Suggest concise bullet talking points the user can say aloud. First person. No STAR format.`)
+
+  return parts.join('\n\n')
+}

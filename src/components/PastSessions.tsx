@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import DockIcon from './DockIcon'
+import {
+  getAssessmentTypeLabel,
+  getSessionAssessmentType,
+  isOnlineTestSession,
+  sortAssessmentTypeKeys,
+} from '../lib/assessment-types'
+import { isMeetingAssistSession } from '../lib/meeting-types'
 
 interface Props {
   onNewSession?: () => void
@@ -15,7 +22,8 @@ export default function PastSessions({ onNewSession, onDock }: Props) {
   const [activeTab, setActiveTab] = useState<'qa' | 'transcript'>('qa')
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [filterType, setFilterType] = useState<'all' | 'interview' | 'mock' | 'online-test'>('all')
+  const [filterType, setFilterType] = useState<'all' | 'interview' | 'mock' | 'meeting' | 'online-test'>('all')
+  const [filterAssessment, setFilterAssessment] = useState<string>('all')
   const [snapOpen, setSnapOpen] = useState(false)
   const snapRef = useRef<HTMLDivElement>(null)
 
@@ -75,11 +83,18 @@ export default function PastSessions({ onNewSession, onDock }: Props) {
   }
 
   function getSessionType(s: PastSession): string {
+    if (isOnlineTestSession(s)) return 'Online Assessment'
+    if (isMeetingAssistSession(s)) return 'Meeting'
     const company = (s.company || '').toLowerCase()
     const role = (s.target_role || '').toLowerCase()
     if (company.includes('mock') || role.includes('mock')) return 'Mock'
-    if (company.includes('online') || role.includes('test') || role.includes('assessment')) return 'Online Assessment'
     return 'Interview'
+  }
+
+  function getSessionSubtitle(s: PastSession): string {
+    const assessmentType = getSessionAssessmentType(s)
+    if (assessmentType) return getAssessmentTypeLabel(assessmentType)
+    return s.target_role || 'Interview Session'
   }
 
   function getStatusBadge(s: PastSession) {
@@ -91,31 +106,58 @@ export default function PastSessions({ onNewSession, onDock }: Props) {
 
   function badgeColor(type: string) {
     const map: Record<string, string> = {
-      behavioral: '#3b82f6',
-      technical: '#8b5cf6',
-      'system-design': '#f59e0b',
+      english: '#3b82f6',
       coding: '#10b981',
+      'ai-ml': '#8b5cf6',
+      numerical: '#f59e0b',
+      technical: '#6366f1',
+      onboarding: '#14b8a6',
       general: '#6b7280',
+      behavioral: '#3b82f6',
+      'system-design': '#f59e0b',
     }
     return map[type] ?? '#6b7280'
   }
+
+  const onlineAssessmentTypes = sortAssessmentTypeKeys(
+    Array.from(
+      new Set(
+        sessions
+          .map(getSessionAssessmentType)
+          .filter((t): t is string => !!t),
+      ),
+    ),
+  )
 
   const filterTypeLabel = (s: PastSession) => {
     const t = getSessionType(s).toLowerCase()
     if (filterType === 'all') return true
     if (filterType === 'interview') return t === 'interview'
     if (filterType === 'mock') return t === 'mock'
-    if (filterType === 'online-test') return t === 'online test'
+    if (filterType === 'meeting') return t === 'meeting'
+    if (filterType === 'online-test') return t === 'online assessment'
     return true
+  }
+
+  const filterAssessmentLabel = (s: PastSession) => {
+    if (filterAssessment === 'all') return true
+    return getSessionAssessmentType(s) === filterAssessment
   }
 
   const filteredSessions = sessions.filter((s) => {
     const q = search.toLowerCase()
     const matchSearch = !q ||
       (s.company || '').toLowerCase().includes(q) ||
-      (s.target_role || '').toLowerCase().includes(q)
-    return matchSearch && filterTypeLabel(s)
+      (s.target_role || '').toLowerCase().includes(q) ||
+      getAssessmentTypeLabel(s.target_role || '').toLowerCase().includes(q)
+    return matchSearch && filterTypeLabel(s) && filterAssessmentLabel(s)
   })
+
+  const selectedAssessmentType = selected ? getSessionAssessmentType(selected) : null
+  const qaCategoryLabel = (qa: SessionQA) =>
+    selectedAssessmentType
+      ? getAssessmentTypeLabel(selectedAssessmentType)
+      : qa.question_type
 
   if (loading) {
     return (
@@ -205,17 +247,48 @@ export default function PastSessions({ onNewSession, onDock }: Props) {
 
         {/* Filter tabs */}
         <div className="ps-filter-tabs">
-          {(['all', 'interview', 'mock', 'online-test'] as const).map((f) => (
+          {(['all', 'interview', 'mock', 'meeting', 'online-test'] as const).map((f) => (
             <button
               key={f}
               type="button"
               className={`ps-filter-tab${filterType === f ? ' active' : ''}`}
-              onClick={() => setFilterType(f)}
+              onClick={() => {
+                setFilterType(f)
+                if (f !== 'online-test') setFilterAssessment('all')
+              }}
             >
-              {f === 'all' ? 'All' : f === 'online-test' ? 'Online Assessment' : f.charAt(0).toUpperCase() + f.slice(1)}
+              {f === 'all'
+                ? 'All'
+                : f === 'online-test'
+                  ? 'Online Assessment'
+                  : f === 'meeting'
+                    ? 'Meeting'
+                    : f.charAt(0).toUpperCase() + f.slice(1)}
             </button>
           ))}
         </div>
+
+        {filterType === 'online-test' && onlineAssessmentTypes.length > 0 && (
+          <div className="ps-filter-tabs ps-filter-tabs--secondary">
+            <button
+              type="button"
+              className={`ps-filter-tab${filterAssessment === 'all' ? ' active' : ''}`}
+              onClick={() => setFilterAssessment('all')}
+            >
+              All types
+            </button>
+            {onlineAssessmentTypes.map((typeId) => (
+              <button
+                key={typeId}
+                type="button"
+                className={`ps-filter-tab${filterAssessment === typeId ? ' active' : ''}`}
+                onClick={() => setFilterAssessment(typeId)}
+              >
+                {getAssessmentTypeLabel(typeId)}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Table or empty state */}
         {filteredSessions.length === 0 ? (
@@ -252,7 +325,7 @@ export default function PastSessions({ onNewSession, onDock }: Props) {
                       <td className="ps-table-col-date">{formatDate(s.started_at)}</td>
                       <td>
                         <div className="ps-table-session-title">{s.company || 'Unknown Company'}</div>
-                        <div className="ps-table-session-sub">{s.target_role || 'Interview Session'}</div>
+                        <div className="ps-table-session-sub">{getSessionSubtitle(s)}</div>
                       </td>
                       <td>
                         <span className="ps-type-badge">{sType}</span>
@@ -302,7 +375,7 @@ export default function PastSessions({ onNewSession, onDock }: Props) {
                 <div className="ps-detail-panel-header-row">
                   <div>
                     <div className="ps-detail-company">{selected.company || 'Unknown Company'}</div>
-                    <div className="ps-detail-role">{selected.target_role || 'Interview Session'}</div>
+                    <div className="ps-detail-role">{getSessionSubtitle(selected)}</div>
                     <div className="ps-detail-meta">
                       {formatDate(selected.started_at)} · {formatTime(selected.started_at)} · {formatDuration(selected.started_at, selected.ended_at)}
                     </div>
@@ -347,12 +420,12 @@ export default function PastSessions({ onNewSession, onDock }: Props) {
                           <span
                             className="ps-qa-badge"
                             style={{
-                              background: `${badgeColor(qa.question_type)}22`,
-                              color: badgeColor(qa.question_type),
-                              border: `1px solid ${badgeColor(qa.question_type)}44`,
+                              background: `${badgeColor(selectedAssessmentType ?? qa.question_type)}22`,
+                              color: badgeColor(selectedAssessmentType ?? qa.question_type),
+                              border: `1px solid ${badgeColor(selectedAssessmentType ?? qa.question_type)}44`,
                             }}
                           >
-                            {qa.question_type}
+                            {qaCategoryLabel(qa)}
                           </span>
                           <span className="ps-qa-time">{formatTime(qa.timestamp)}</span>
                         </div>

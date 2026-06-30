@@ -486,6 +486,8 @@ async function bootstrap() {
       company:         clamp(config.company           ?? '', LIMITS.company,   'company'),
       targetRole:      clamp(config.targetRole        ?? '', LIMITS.targetRole,'targetRole'),
       extraContext:    clamp(config.extraContext       ?? '', LIMITS.extraCtx,  'extraContext'),
+      meetingRole:     clamp(config.meetingRole        ?? '', LIMITS.targetRole,'meetingRole'),
+      meetingContext:  clamp(config.meetingContext     ?? '', LIMITS.extraCtx,  'meetingContext'),
       userId: currentUserId ?? undefined,
       userEmail: currentUserEmail ?? undefined,
     }

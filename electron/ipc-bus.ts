@@ -177,4 +177,8 @@ export interface SessionConfig {
   userId?: string
   userEmail?: string
   testType?: string  // 'english' | 'coding' | 'ai-ml' | 'numerical' | 'technical' | 'onboarding' | 'general'
+  sessionMode?: 'interview' | 'meeting' | 'online-test'
+  meetingType?: 'standup' | 'general'
+  meetingRole?: string
+  meetingContext?: string
 }

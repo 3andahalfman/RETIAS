@@ -1,4 +1,5 @@
 import { IpcBus } from '../ipc-bus.js'
+import { isBareUrl } from '../lib/question-text.js'
 
 /**
  * Question Detector — Phase 4
@@ -60,6 +61,7 @@ function extractQuestionSentences(text: string): string {
 function isQuestion(text: string): boolean {
   const cleaned = text.trim()
   if (!cleaned) return false
+  if (isBareUrl(cleaned)) return false
 
   const lower = cleaned.toLowerCase().replace(/[?!.]+$/, '').trim()
 

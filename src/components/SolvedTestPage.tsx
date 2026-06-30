@@ -18,6 +18,8 @@ import {
   OnlineTestIconBadge,
   OnlineTestPageHeader,
 } from './OnlineTestIcons'
+import { displayQuestionText } from '../lib/question-text'
+import { getAssessmentTypeLabel, sortAssessmentTypeKeys } from '../lib/assessment-types'
 
 interface SolvedQuestion {
   id: string
@@ -37,7 +39,7 @@ interface Props {
   onDock: () => void
 }
 
-type Level = 'platforms' | 'assessments' | 'questions'
+type Level = 'assessments' | 'platforms' | 'questions'
 
 interface SavedNav {
   level: Level
@@ -47,15 +49,15 @@ interface SavedNav {
   search: string
 }
 
-const NAV_KEY = 'retias-solved-nav'
+const NAV_KEY = 'retias-solved-nav-v2'
 
 function readSavedNav(): SavedNav | null {
   try {
     const raw = sessionStorage.getItem(NAV_KEY)
     if (!raw) return null
     const nav = JSON.parse(raw) as SavedNav
-    if (nav.level === 'questions' && (!nav.activePlatform || !nav.activeAssessment)) return null
-    if (nav.level === 'assessments' && !nav.activePlatform) return null
+    if (nav.level === 'questions' && (!nav.activeAssessment || !nav.activePlatform)) return null
+    if (nav.level === 'platforms' && !nav.activeAssessment) return null
     return nav
   } catch {
     return null
@@ -75,9 +77,9 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
   const [rows, setRows] = useState<SolvedQuestion[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [level, setLevel] = useState<Level>(saved?.level ?? 'platforms')
-  const [activePlatform, setActivePlatform] = useState<string | null>(saved?.activePlatform ?? null)
+  const [level, setLevel] = useState<Level>(saved?.level ?? 'assessments')
   const [activeAssessment, setActiveAssessment] = useState<string | null>(saved?.activeAssessment ?? null)
+  const [activePlatform, setActivePlatform] = useState<string | null>(saved?.activePlatform ?? null)
   const [search, setSearch] = useState(saved?.search ?? '')
   const [questionIndex, setQuestionIndex] = useState(saved?.questionIndex ?? 0)
   const [answerById, setAnswerById] = useState<Record<string, string>>({})
@@ -144,13 +146,14 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
     onBack()
   }, [onBack])
 
-  const goToAssessmentsFromQA = () => {
+  const goToPlatformsFromQA = () => {
     if (liveActive) {
       window.electronAPI?.stopSession()
       setLiveActive(false)
       setCaptureQueue([])
     }
-    goToAssessments(activePlatform!)
+    if (activeAssessment) goToPlatforms(activeAssessment)
+    else goToAssessments()
   }
 
   const handleStartLive = () => {
@@ -158,7 +161,7 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
     if (model === 'claude-opus-4-5' && !user.is_premium) {
       model = 'claude-sonnet-4-6'
     }
-    const testType = activeAssessment || activePlatform || 'online-test'
+    const testType = activeAssessment || 'general'
     window.electronAPI?.startSession({ testType, aiModel: model })
     setLiveActive(true)
     setMicActive(false)
@@ -195,24 +198,27 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
   const tree = useMemo(() => {
     const map = new Map<string, Map<string, SolvedQuestion[]>>()
     for (const row of rows) {
-      const platform = row.platform || 'Unknown'
       const assessment = row.assessment_type || 'General'
-      if (!map.has(platform)) map.set(platform, new Map())
-      const inner = map.get(platform)!
-      if (!inner.has(assessment)) inner.set(assessment, [])
-      inner.get(assessment)!.push(row)
+      const platform = row.platform || 'Unknown'
+      if (!map.has(assessment)) map.set(assessment, new Map())
+      const inner = map.get(assessment)!
+      if (!inner.has(platform)) inner.set(platform, [])
+      inner.get(platform)!.push(row)
     }
     return map
   }, [rows])
 
-  const platforms = useMemo(() => Array.from(tree.keys()).sort(), [tree])
-  const assessmentTypes = useMemo(() => {
-    if (!activePlatform) return []
-    return Array.from(tree.get(activePlatform)?.keys() ?? []).sort()
-  }, [tree, activePlatform])
+  const assessmentTypes = useMemo(
+    () => sortAssessmentTypeKeys(Array.from(tree.keys())),
+    [tree],
+  )
+  const platforms = useMemo(() => {
+    if (!activeAssessment) return []
+    return Array.from(tree.get(activeAssessment)?.keys() ?? []).sort()
+  }, [tree, activeAssessment])
   const questions = useMemo(() => {
-    if (!activePlatform || !activeAssessment) return []
-    const list = tree.get(activePlatform)?.get(activeAssessment) ?? []
+    if (!activeAssessment || !activePlatform) return []
+    const list = tree.get(activeAssessment)?.get(activePlatform) ?? []
     if (!search.trim()) return list
     const q = search.toLowerCase()
     return list.filter((row) =>
@@ -221,38 +227,39 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
     )
   }, [tree, activePlatform, activeAssessment, search])
 
-  const goToPlatforms = () => {
-    setLevel('platforms')
-    setActivePlatform(null)
-    setActiveAssessment(null)
-    setSearch('')
-    setQuestionIndex(0)
-  }
-  const goToAssessments = (platform: string) => {
-    setActivePlatform(platform)
-    setActiveAssessment(null)
+  const goToAssessments = () => {
     setLevel('assessments')
+    setActiveAssessment(null)
+    setActivePlatform(null)
     setSearch('')
     setQuestionIndex(0)
   }
-  const goToQuestions = (assessment: string) => {
+  const goToPlatforms = (assessment: string) => {
     setActiveAssessment(assessment)
+    setActivePlatform(null)
+    setLevel('platforms')
+    setSearch('')
+    setQuestionIndex(0)
+  }
+  const goToQuestions = (platform: string) => {
+    setActivePlatform(platform)
     setLevel('questions')
     setSearch('')
     setQuestionIndex(0)
   }
 
   const headerTitle =
-    level === 'platforms' ? 'Solved Assessment'
-    : level === 'assessments' ? activePlatform
-    : `${activePlatform} · ${activeAssessment}`
+    level === 'assessments' ? 'Solved Assessment'
+    : level === 'platforms' ? getAssessmentTypeLabel(activeAssessment ?? '')
+    : `${getAssessmentTypeLabel(activeAssessment ?? '')} · ${activePlatform}`
 
   const safeIndex = Math.min(questionIndex, Math.max(0, questions.length - 1))
   const current = questions[safeIndex]
+  const displayQuestion = current ? displayQuestionText(current.question) : ''
 
   const headerSubtitle =
-    level === 'platforms' ? 'Pick a platform to browse curated assessments.'
-    : level === 'assessments' ? 'Pick an assessment type.'
+    level === 'assessments' ? 'Pick an assessment type to browse curated questions.'
+    : level === 'platforms' ? 'Pick a platform within this assessment type.'
     : questions.length === 0
       ? '0 solved questions'
       : `Question ${safeIndex + 1} of ${questions.length}`
@@ -274,8 +281,8 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
   const getSolvedAnswer = useCallback(() => displayAnswerRef.current || null, [])
 
   // ── Q&A session layout (interview-style) ─────────────────────────────────
-  if (level === 'questions' && activePlatform && activeAssessment) {
-    const sessionLabel = `${activePlatform} · ${activeAssessment}`
+  if (level === 'questions' && activeAssessment && activePlatform) {
+    const sessionLabel = `${getAssessmentTypeLabel(activeAssessment)} · ${activePlatform}`
 
     return (
       <div className={`app-root session solved-qa-session${isDocked ? ' docked' : ''}`}>
@@ -309,9 +316,9 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
             convState={convState}
             isPremium={user.is_premium}
             sessionCompany={activePlatform}
-            sessionRole={activeAssessment}
+            sessionRole={getAssessmentTypeLabel(activeAssessment)}
             aiModel={aiModel}
-            onBack={goToAssessmentsFromQA}
+            onBack={goToPlatformsFromQA}
           />
 
           <div className="panels solved-qa-panels" ref={panelsRef}>
@@ -364,9 +371,10 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
                     ) : (
                       <>
                         <div className="solved-qa-q-badge">Q{safeIndex + 1}</div>
-                        <pre className="solved-test-block solved-qa-question-text">{current.question}</pre>
-                        {current.source_url && (
-                          <div className="solved-test-detail-url">{current.source_url}</div>
+                        {displayQuestion ? (
+                          <pre className="solved-test-block solved-qa-question-text">{displayQuestion}</pre>
+                        ) : (
+                          <p className="panel-placeholder">Question text unavailable.</p>
                         )}
                       </>
                     )}
@@ -432,13 +440,13 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
     <div className="setup-root">
       <div className="setup-inner-topbar">
         <div className="setup-inner-topbar-left">
-          {level === 'platforms' ? (
+          {level === 'assessments' ? (
             <button type="button" className="setup-breadcrumb-btn" onClick={handleExit}>
               ← Back to Dashboard
             </button>
           ) : (
-            <button type="button" className="setup-breadcrumb-btn" onClick={goToPlatforms}>
-              ← Platforms
+            <button type="button" className="setup-breadcrumb-btn" onClick={goToAssessments}>
+              ← Assessment Types
             </button>
           )}
         </div>
@@ -447,7 +455,7 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
         </div>
       </div>
 
-      {level === 'platforms' ? (
+      {level === 'assessments' ? (
         <OnlineTestPageHeader
           title="Solved Assessment"
           subtitle={headerSubtitle}
@@ -471,26 +479,27 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
           </div>
         )}
 
-        {!loading && !error && level === 'platforms' && rows.length > 0 && (
+        {!loading && !error && level === 'assessments' && rows.length > 0 && (
           <div className="solved-test-grid">
-            {platforms.map((p) => {
-              const types = tree.get(p)!
-              const total = Array.from(types.values()).reduce((sum, arr) => sum + arr.length, 0)
+            {assessmentTypes.map((a) => {
+              const platformsMap = tree.get(a)!
+              const platformCount = platformsMap.size
+              const total = Array.from(platformsMap.values()).reduce((sum, arr) => sum + arr.length, 0)
               return (
                 <button
-                  key={p}
+                  key={a}
                   type="button"
                   className="solved-test-card"
-                  onClick={() => goToAssessments(p)}
+                  onClick={() => goToPlatforms(a)}
                 >
                   <div className="online-test-card-top">
-                    <OnlineTestIconBadge accent={ONLINE_TEST_ACCENTS.teal}>
-                      <IconPlatform size={18} />
+                    <OnlineTestIconBadge accent={ONLINE_TEST_ACCENTS.blue}>
+                      <IconAssessmentDoc size={18} />
                     </OnlineTestIconBadge>
-                    <div className="solved-test-card-title">{p}</div>
+                    <div className="solved-test-card-title">{getAssessmentTypeLabel(a)}</div>
                   </div>
                   <div className="solved-test-card-meta">
-                    {types.size} assessment{types.size === 1 ? '' : 's'} · {total} question{total === 1 ? '' : 's'}
+                    {platformCount} platform{platformCount === 1 ? '' : 's'} · {total} question{total === 1 ? '' : 's'}
                   </div>
                 </button>
               )
@@ -498,22 +507,22 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
           </div>
         )}
 
-        {!loading && !error && level === 'assessments' && activePlatform && (
+        {!loading && !error && level === 'platforms' && activeAssessment && (
           <div className="solved-test-grid">
-            {assessmentTypes.map((a) => {
-              const count = tree.get(activePlatform)?.get(a)?.length ?? 0
+            {platforms.map((p) => {
+              const count = tree.get(activeAssessment)?.get(p)?.length ?? 0
               return (
                 <button
-                  key={a}
+                  key={p}
                   type="button"
                   className="solved-test-card"
-                  onClick={() => goToQuestions(a)}
+                  onClick={() => goToQuestions(p)}
                 >
                   <div className="online-test-card-top">
-                    <OnlineTestIconBadge accent={ONLINE_TEST_ACCENTS.blue}>
-                      <IconAssessmentDoc size={18} />
+                    <OnlineTestIconBadge accent={ONLINE_TEST_ACCENTS.teal}>
+                      <IconPlatform size={18} />
                     </OnlineTestIconBadge>
-                    <div className="solved-test-card-title">{a}</div>
+                    <div className="solved-test-card-title">{p}</div>
                   </div>
                   <div className="solved-test-card-meta">{count} question{count === 1 ? '' : 's'}</div>
                 </button>
