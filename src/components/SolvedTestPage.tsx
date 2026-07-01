@@ -19,7 +19,11 @@ import {
   OnlineTestPageHeader,
 } from './OnlineTestIcons'
 import { displayQuestionText } from '../lib/question-text'
-import { getAssessmentTypeLabel, sortAssessmentTypeKeys } from '../lib/assessment-types'
+import {
+  classifySolvedQuestionCategory,
+  getSolvedCategoryLabel,
+  sortSolvedCategoryKeys,
+} from '../lib/solved-question-category'
 
 interface SolvedQuestion {
   id: string
@@ -198,7 +202,7 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
   const tree = useMemo(() => {
     const map = new Map<string, Map<string, SolvedQuestion[]>>()
     for (const row of rows) {
-      const assessment = row.assessment_type || 'General'
+      const assessment = classifySolvedQuestionCategory(row.question, row.assessment_type)
       const platform = row.platform || 'Unknown'
       if (!map.has(assessment)) map.set(assessment, new Map())
       const inner = map.get(assessment)!
@@ -209,7 +213,7 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
   }, [rows])
 
   const assessmentTypes = useMemo(
-    () => sortAssessmentTypeKeys(Array.from(tree.keys())),
+    () => sortSolvedCategoryKeys(Array.from(tree.keys())),
     [tree],
   )
   const platforms = useMemo(() => {
@@ -250,8 +254,8 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
 
   const headerTitle =
     level === 'assessments' ? 'Solved Assessment'
-    : level === 'platforms' ? getAssessmentTypeLabel(activeAssessment ?? '')
-    : `${getAssessmentTypeLabel(activeAssessment ?? '')} · ${activePlatform}`
+    : level === 'platforms' ? getSolvedCategoryLabel(activeAssessment ?? '')
+    : `${getSolvedCategoryLabel(activeAssessment ?? '')} · ${activePlatform}`
 
   const safeIndex = Math.min(questionIndex, Math.max(0, questions.length - 1))
   const current = questions[safeIndex]
@@ -282,7 +286,7 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
 
   // ── Q&A session layout (interview-style) ─────────────────────────────────
   if (level === 'questions' && activeAssessment && activePlatform) {
-    const sessionLabel = `${getAssessmentTypeLabel(activeAssessment)} · ${activePlatform}`
+    const sessionLabel = `${getSolvedCategoryLabel(activeAssessment)} · ${activePlatform}`
 
     return (
       <div className={`app-root session solved-qa-session${isDocked ? ' docked' : ''}`}>
@@ -316,7 +320,7 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
             convState={convState}
             isPremium={user.is_premium}
             sessionCompany={activePlatform}
-            sessionRole={getAssessmentTypeLabel(activeAssessment)}
+            sessionRole={getSolvedCategoryLabel(activeAssessment)}
             aiModel={aiModel}
             onBack={goToPlatformsFromQA}
           />
@@ -496,7 +500,7 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
                     <OnlineTestIconBadge accent={ONLINE_TEST_ACCENTS.blue}>
                       <IconAssessmentDoc size={18} />
                     </OnlineTestIconBadge>
-                    <div className="solved-test-card-title">{getAssessmentTypeLabel(a)}</div>
+                    <div className="solved-test-card-title">{getSolvedCategoryLabel(a)}</div>
                   </div>
                   <div className="solved-test-card-meta">
                     {platformCount} platform{platformCount === 1 ? '' : 's'} · {total} question{total === 1 ? '' : 's'}
