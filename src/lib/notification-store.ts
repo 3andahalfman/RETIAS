@@ -43,7 +43,20 @@ export function getNotificationState(): NotificationState {
 function syncReadyFromMain() {
   window.electronAPI?.getUpdateCheckStatus?.()
     .then((result) => {
-      if (result?.downloadPhase === 'ready') syncUpdateDownloadState(result)
+      if (result?.downloadPhase === 'ready') {
+        syncUpdateDownloadState(result)
+        return
+      }
+      // Main may still report 'downloading' while finalizing after 100% progress.
+      if (result?.downloadPhase === 'downloading' && state.progress >= 100) {
+        window.setTimeout(() => {
+          window.electronAPI?.getUpdateCheckStatus?.()
+            .then((retry) => {
+              if (retry?.downloadPhase === 'ready') syncUpdateDownloadState(retry)
+            })
+            .catch(() => {})
+        }, 3500)
+      }
     })
     .catch(() => {})
 }

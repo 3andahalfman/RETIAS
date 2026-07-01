@@ -3754,6 +3754,28 @@ html, body, #root {
 .force-update-progress-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .force-update-progress-wrap .update-banner-bar { width: 100%; }
 .force-update-pct { font-size: 12px; color: var(--text-muted); }
+.force-update-version { color: #fff; }
+.force-update-card-ready {
+  border-color: #2d8c2d;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(76, 175, 80, 0.35);
+  animation: update-ready-pop 0.35s ease-out;
+}
+.force-update-icon-ready {
+  width: 56px; height: 56px; margin: 0 auto 16px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: rgba(76, 175, 80, 0.15);
+  color: #6fcf6f; font-size: 28px; font-weight: 700;
+}
+.force-update-btn-install {
+  background: linear-gradient(135deg, #2d8c2d, #4caf50);
+  font-size: 15px; padding: 13px 0;
+  box-shadow: 0 4px 20px rgba(76, 175, 80, 0.35);
+}
+.update-ready-overlay { z-index: 25000; }
+@keyframes update-ready-pop {
+  from { transform: scale(0.96); opacity: 0.7; }
+  to { transform: scale(1); opacity: 1; }
+}
 
 /* ── Update Banner ── */
 .update-banner {

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import WindowControls from './WindowControls'
+import UpdateReadyOverlay from './UpdateReadyOverlay'
 import {
   downloadUpdate,
-  installUpdate,
   syncUpdateDownloadState,
   useAppNotifications,
 } from '../lib/notification-store'
@@ -131,7 +131,7 @@ export default function UpdateGate({ onPassed }: UpdateGateProps) {
   if (checkStatus === 'error') {
     return (
       <UpdateGateShell onDock={handleDock}>
-        <div className="force-update-overlay" style={{ position: 'relative', background: 'transparent', backdropFilter: 'none' }}>
+        <div className="force-update-overlay">
           <div className="force-update-card">
             <div className="force-update-icon">⚠️</div>
             <h2 className="force-update-title">Update check failed</h2>
@@ -157,23 +157,24 @@ export default function UpdateGate({ onPassed }: UpdateGateProps) {
 
   // Update required — block app until downloaded and installed
   if (checkStatus === 'available') {
+    if (phase === 'ready') {
+      return (
+        <UpdateGateShell className="update-gate-root" onDock={handleDock}>
+          <UpdateReadyOverlay version={version} fullscreen />
+        </UpdateGateShell>
+      )
+    }
+
     return (
       <UpdateGateShell onDock={handleDock}>
-        <div className="force-update-overlay" style={{ position: 'relative', background: 'transparent', backdropFilter: 'none' }}>
+        <div className="force-update-overlay">
           <div className="force-update-card">
             <div className="force-update-icon">⬆️</div>
             <h2 className="force-update-title">Update required</h2>
-            {phase === 'ready' ? (
-              <>
-                <p className="force-update-body">Update downloaded — restart to apply the latest version.</p>
-                <button type="button" className="force-update-btn" onClick={installUpdate}>
-                  Restart &amp; Install
-                </button>
-              </>
-            ) : phase === 'downloading' ? (
+            {phase === 'downloading' ? (
               <div className="force-update-progress-wrap">
                 <p className="force-update-body" style={{ marginBottom: 0 }}>
-                  {progress >= 100 ? 'Preparing update…' : 'Downloading update…'}
+                  {progress >= 100 ? 'Finalizing download…' : 'Downloading update…'}
                 </p>
                 <div className="update-banner-bar">
                   <div className="update-banner-fill" style={{ width: `${Math.min(progress, 100)}%` }} />
@@ -183,7 +184,7 @@ export default function UpdateGate({ onPassed }: UpdateGateProps) {
             ) : (
               <>
                 <p className="force-update-body">
-                  Version <strong style={{ color: '#fff' }}>{version}</strong> is available.
+                  Version <strong className="force-update-version">{version}</strong> is available.
                   Download and install it to continue.
                 </p>
                 <button type="button" className="force-update-btn" onClick={downloadUpdate}>

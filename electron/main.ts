@@ -45,6 +45,7 @@ let startupUpdateCheckPromise: Promise<void> | null = null
 let updateDownloadInProgress = false
 let updateDownloaded = false
 let updateDownloadPromise: Promise<unknown> | null = null
+let updateFinalizeTimer: ReturnType<typeof setTimeout> | null = null
 
 type UpdateDownloadPhase = 'idle' | 'downloading' | 'ready'
 
@@ -62,12 +63,61 @@ function buildUpdateCheckResponse() {
   }
 }
 
+function clearUpdateFinalizeTimer() {
+  if (updateFinalizeTimer) {
+    clearTimeout(updateFinalizeTimer)
+    updateFinalizeTimer = null
+  }
+}
+
+/** Mark download complete — safe to call from event handler and downloadUpdate() promise. */
+function markUpdateDownloaded(version?: string | null) {
+  if (updateDownloaded) return
+  clearUpdateFinalizeTimer()
+  updateDownloadInProgress = false
+  updateDownloaded = true
+  updateDownloadPromise = null
+  if (version) updateAvailableVersion = version
+  logger.log('[Updater] Update downloaded — ready to install:', updateAvailableVersion ?? 'unknown')
+  console.log('[Updater] update-downloaded — version:', updateAvailableVersion)
+  if (updateCheckStatus !== 'available') {
+    setUpdateCheckStatus('available', updateAvailableVersion)
+  }
+  notifyUpdateDownloaded()
+}
+
 function notifyUpdateDownloaded() {
   if (!overlayWindow || overlayWindow.isDestroyed()) return
   // Dual-channel: fire-and-forget event plus durable check-status sync so the
   // renderer can recover if it missed update:downloaded (e.g. late listener attach).
   overlayWindow.webContents.send('update:downloaded')
   sendUpdateCheckStatus()
+}
+
+/** Progress can hit 100% before update-downloaded fires; re-check the download promise. */
+function scheduleUpdateFinalizeCheck() {
+  clearUpdateFinalizeTimer()
+  updateFinalizeTimer = setTimeout(() => {
+    updateFinalizeTimer = null
+    if (updateDownloaded) return
+    if (updateDownloadPromise) {
+      updateDownloadPromise
+        .then(() => markUpdateDownloaded())
+        .catch((err: Error) => {
+          updateDownloadInProgress = false
+          updateDownloadPromise = null
+          logger.warn('[Updater] Finalize after 100% failed:', err.message)
+          console.error('[Updater] Finalize after 100% failed:', err)
+          sendUpdateCheckStatus()
+        })
+      return
+    }
+    if (updateDownloadInProgress) {
+      logger.warn('[Updater] Stalled at 100% — download still marked in progress')
+      console.warn('[Updater] Stalled at 100% — no active download promise')
+      sendUpdateCheckStatus()
+    }
+  }, 3000)
 }
 
 function sendUpdateCheckStatus() {
@@ -179,23 +229,22 @@ function setupAutoUpdater() {
 
   autoUpdater.on('download-progress', (progress) => {
     updateDownloadInProgress = true
-    overlayWindow?.webContents.send('update:progress', Math.round(progress.percent))
+    const pct = Math.round(progress.percent)
+    overlayWindow?.webContents.send('update:progress', pct)
+    if (pct >= 100) scheduleUpdateFinalizeCheck()
   })
 
-  autoUpdater.on('update-downloaded', () => {
-    updateDownloadInProgress = false
-    updateDownloaded = true
-    updateDownloadPromise = null
-    if (updateCheckStatus !== 'available') {
-      setUpdateCheckStatus('available', updateAvailableVersion)
-    }
-    notifyUpdateDownloaded()
+  autoUpdater.on('update-downloaded', (info) => {
+    markUpdateDownloaded(info?.version ?? updateAvailableVersion)
   })
 
   autoUpdater.on('error', (err) => {
+    clearUpdateFinalizeTimer()
     if (updateDownloadInProgress) updateDownloadInProgress = false
+    updateDownloadPromise = null
     logger.warn('[Updater] Error:', err.message)
     console.warn('[Updater] Error:', err.message)
+    sendUpdateCheckStatus()
   })
 }
 let currentUserId: string | null = null
@@ -864,7 +913,13 @@ async function bootstrap() {
     updateDownloadInProgress = true
     sendUpdateCheckStatus()
     updateDownloadPromise = autoUpdater.downloadUpdate()
+      .then(() => {
+        // Promise resolution is the reliable signal on Windows NSIS; the event
+        // can lag or be missed while progress already shows 100%.
+        markUpdateDownloaded(updateAvailableVersion)
+      })
       .catch((err: Error) => {
+        clearUpdateFinalizeTimer()
         updateDownloadInProgress = false
         updateDownloadPromise = null
         logger.warn('[Updater] downloadUpdate failed:', err.message)
@@ -874,7 +929,14 @@ async function bootstrap() {
   })
 
   ipcMain.on('update:install', () => {
-    if (app.isPackaged) autoUpdater.quitAndInstall()
+    if (!app.isPackaged) return
+    if (!updateDownloaded) {
+      logger.warn('[Updater] install requested before download completed')
+      console.warn('[Updater] install requested before download completed')
+      return
+    }
+    // NSIS non-oneClick: show installer UI, then relaunch app when done.
+    autoUpdater.quitAndInstall(false, true)
   })
 
   // Mock interview — generates a job description from the candidate's resume

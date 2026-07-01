@@ -148,8 +148,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Auto-updater
   getUpdateCheckStatus: () => ipcRenderer.invoke('update:get-check-status'),
-  onUpdateCheckStatus: (cb: (result: { status: string; version?: string | null }) => void) => {
-    const handler = (_e: Electron.IpcRendererEvent, result: { status: string; version?: string | null }) => cb(result)
+  onUpdateCheckStatus: (cb: (result: {
+    status: string
+    version?: string | null
+    downloadPhase?: 'idle' | 'downloading' | 'ready'
+  }) => void) => {
+    const handler = (
+      _e: Electron.IpcRendererEvent,
+      result: { status: string; version?: string | null; downloadPhase?: 'idle' | 'downloading' | 'ready' },
+    ) => cb(result)
     ipcRenderer.on('update:check-status', handler)
     return () => ipcRenderer.removeListener('update:check-status', handler)
   },

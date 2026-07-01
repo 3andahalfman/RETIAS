@@ -7,6 +7,39 @@ export interface TextSelectionState {
 
 const MIN_SELECTION_LEN = 2
 
+/** Rendered markdown code: fenced blocks, inline code, SyntaxHighlighter output. */
+const CODE_BLOCK_SELECTOR = 'pre, code, .answer-code-block, .answer-inline-code, .syntax-highlighter'
+
+function nodeInCodeBlock(node: Node | null): boolean {
+  const el =
+    node == null
+      ? null
+      : node.nodeType === Node.TEXT_NODE
+        ? node.parentElement
+        : node instanceof Element
+          ? node
+          : null
+  return !!el?.closest(CODE_BLOCK_SELECTOR)
+}
+
+function selectionIntersectsCodeBlock(sel: Selection, range: Range): boolean {
+  if (nodeInCodeBlock(sel.anchorNode) || nodeInCodeBlock(sel.focusNode)) return true
+
+  const root =
+    range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+      ? range.commonAncestorContainer.parentNode
+      : range.commonAncestorContainer
+  if (!root) return false
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  let textNode: Node | null
+  while ((textNode = walker.nextNode())) {
+    if (!range.intersectsNode(textNode)) continue
+    if (nodeInCodeBlock(textNode)) return true
+  }
+  return false
+}
+
 function readContainerSelection(container: HTMLElement): TextSelectionState | null {
   const sel = window.getSelection()
   if (!sel || sel.isCollapsed || !sel.rangeCount) return null
@@ -16,6 +49,7 @@ function readContainerSelection(container: HTMLElement): TextSelectionState | nu
 
   const range = sel.getRangeAt(0)
   if (!container.contains(range.commonAncestorContainer)) return null
+  if (selectionIntersectsCodeBlock(sel, range)) return null
 
   const rect = range.getBoundingClientRect()
   if (!rect.width && !rect.height) return null
