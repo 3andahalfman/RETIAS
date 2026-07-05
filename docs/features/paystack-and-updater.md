@@ -12,7 +12,7 @@ Two unrelated cross-cutting concerns kept together because they're both about li
 | `src/components/PricingPage.tsx` | Uses PaystackButton for upgrade CTAs |
 | `supabase/functions/verify-payment/index.ts` | Edge fn — server-side Paystack verification, writes `app_metadata` + `subscriptions` row |
 | `supabase/functions/paystack-webhook/index.ts` | Edge fn — handles `charge.success`, `subscription.disable`, etc. |
-| Tables | `subscriptions` (source of truth), `app_metadata.is_premium*` (cached on JWT) |
+| Tables | `subscriptions` (source of truth), `subscription_events` (tier change audit log), `app_metadata.is_premium*` (cached on JWT) |
 
 ### Flow
 

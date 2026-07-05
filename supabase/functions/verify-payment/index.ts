@@ -133,6 +133,10 @@ Deno.serve(async (req) => {
   }
   const periodEnd = oneMonthFromNow()
 
+  const { data: existingSub } = await supabaseAdmin.from('subscriptions').select('tier').eq('user_id', userId).maybeSingle()
+  const fromTier = (existingSub?.tier as string | null) ?? null
+  const isRenewal = fromTier === tier
+
   // 1. Source of truth: subscriptions table (one row per user)
   const { error: subError } = await supabaseAdmin.from('subscriptions').upsert({
     user_id: userId,
@@ -165,6 +169,16 @@ Deno.serve(async (req) => {
   if (updateError) {
     return jsonResponse({ error: `Activation failed: ${updateError.message}` }, 500)
   }
+
+  await supabaseAdmin.from('subscription_events').insert({
+    user_id: userId,
+    user_email: userEmail,
+    from_tier: fromTier,
+    to_tier: tier,
+    event_type: isRenewal ? 'renewal' : 'upgrade',
+    upgrade_source: 'payment',
+    notes: `Paystack verify-payment reference ${reference}`,
+  })
 
   return jsonResponse({
     success: true,

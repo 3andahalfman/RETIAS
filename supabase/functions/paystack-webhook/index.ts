@@ -49,14 +49,42 @@ async function findUserIdByEmail(
   return null
 }
 
+async function logSubscriptionEvent(
+  admin: ReturnType<typeof createClient>,
+  userId: string,
+  opts: {
+    userEmail?: string
+    fromTier?: string | null
+    toTier?: string | null
+    eventType: 'upgrade' | 'downgrade' | 'renewal' | 'cancel'
+    upgradeSource: 'manual' | 'payment'
+    adminEmail?: string
+    notes?: string
+  },
+): Promise<void> {
+  await admin.from('subscription_events').insert({
+    user_id: userId,
+    user_email: opts.userEmail ?? null,
+    from_tier: opts.fromTier ?? null,
+    to_tier: opts.toTier ?? null,
+    event_type: opts.eventType,
+    upgrade_source: opts.upgradeSource,
+    admin_email: opts.adminEmail ?? null,
+    notes: opts.notes ?? null,
+  })
+}
+
 // Activate (or renew) a paid subscription: write the subscriptions row (source of
 // truth) + cached flags on app_metadata.
 async function activate(
   admin: ReturnType<typeof createClient>,
   userId: string,
-  opts: { tier: 'pro' | 'plus'; planCode?: string; subscriptionCode?: string; customerCode?: string },
+  opts: { tier: 'pro' | 'plus'; planCode?: string; subscriptionCode?: string; customerCode?: string; userEmail?: string },
 ): Promise<void> {
   const now = new Date().toISOString()
+  const { data: existing } = await admin.from('subscriptions').select('tier').eq('user_id', userId).maybeSingle()
+  const fromTier = (existing?.tier as string | null) ?? null
+  const isRenewal = fromTier === opts.tier
   await admin.from('subscriptions').upsert({
     user_id: userId,
     provider: 'paystack',
@@ -79,6 +107,15 @@ async function activate(
       premium_activated_at: now,
     },
   })
+
+  await logSubscriptionEvent(admin, userId, {
+    userEmail: opts.userEmail,
+    fromTier,
+    toTier: opts.tier,
+    eventType: isRenewal ? 'renewal' : 'upgrade',
+    upgradeSource: 'payment',
+    notes: isRenewal ? 'Paystack renewal' : 'Paystack payment activation',
+  })
 }
 
 // Mark the subscription with a new status and, when it ends access, clear flags.
@@ -86,10 +123,21 @@ async function setStatus(
   admin: ReturnType<typeof createClient>,
   userId: string,
   status: 'past_due' | 'canceled',
+  userEmail?: string,
 ): Promise<void> {
   const now = new Date().toISOString()
+  const { data: existing } = await admin.from('subscriptions').select('tier').eq('user_id', userId).maybeSingle()
+  const fromTier = (existing?.tier as string | null) ?? null
   await admin.from('subscriptions').update({ status, updated_at: now }).eq('user_id', userId)
   if (status === 'canceled') {
+    await logSubscriptionEvent(admin, userId, {
+      userEmail,
+      fromTier,
+      toTier: null,
+      eventType: 'cancel',
+      upgradeSource: 'payment',
+      notes: 'Paystack subscription disabled',
+    })
     await admin.auth.admin.updateUserById(userId, {
       app_metadata: {
         is_premium: false,
@@ -163,6 +211,7 @@ Deno.serve(async (req) => {
         planCode: planCode || undefined,
         subscriptionCode: subscriptionCode || undefined,
         customerCode: customer.customer_code,
+        userEmail: email || undefined,
       })
       break
     }
@@ -173,7 +222,7 @@ Deno.serve(async (req) => {
     }
     // Subscription ended/cancelled → revoke access
     case 'subscription.disable': {
-      await setStatus(admin, userId, 'canceled')
+      await setStatus(admin, userId, 'canceled', email || undefined)
       break
     }
     default:
