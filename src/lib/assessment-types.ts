@@ -2,21 +2,23 @@
 export const ASSESSMENT_TYPES = [
   { id: 'english', label: 'English / Verbal' },
   { id: 'coding', label: 'Coding Assessment' },
-  { id: 'ai-ml', label: 'AI / ML Test' },
   { id: 'numerical', label: 'Numerical Reasoning' },
   { id: 'technical', label: 'Technical Assessment' },
-  { id: 'onboarding', label: 'Onboarding / Compliance' },
+  { id: 'onboarding', label: 'Project Onboarding' },
   { id: 'general', label: 'General' },
 ] as const
 
 export type AssessmentTypeId = (typeof ASSESSMENT_TYPES)[number]['id']
 
 const LABEL_BY_ID = new Map(ASSESSMENT_TYPES.map((t) => [t.id, t.label]))
+const LEGACY_LABELS: Record<string, string> = {
+  'ai-ml': 'AI / ML',
+}
 const ORDER = ASSESSMENT_TYPES.map((t) => t.id)
 
 /** Human-readable label for a session testType id; passthrough for admin-curated names. */
 export function getAssessmentTypeLabel(idOrLabel: string): string {
-  return LABEL_BY_ID.get(idOrLabel as AssessmentTypeId) ?? idOrLabel
+  return LABEL_BY_ID.get(idOrLabel as AssessmentTypeId) ?? LEGACY_LABELS[idOrLabel] ?? idOrLabel
 }
 
 export function isKnownAssessmentTypeId(id: string): id is AssessmentTypeId {

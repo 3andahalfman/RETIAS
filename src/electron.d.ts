@@ -94,6 +94,8 @@ interface ElectronAPI {
   getDesktopSources: () => Promise<Array<{ id: string; name: string }>>
   analyseScreen: () => Promise<void>
   captureScreen: () => Promise<string>
+  extractInstructionsFromScreen: () => Promise<string>
+  updateSessionExtraContext: (text: string) => void
   analyseScreens: (images: string[]) => Promise<void>
   sendManualPrompt: (text: string) => Promise<void>
   sendAudioChunk: (buffer: ArrayBuffer, sampleRate: number, source: 'mic' | 'system') => void

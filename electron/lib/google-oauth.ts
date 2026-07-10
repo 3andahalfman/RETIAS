@@ -54,7 +54,7 @@ export async function startGoogleOAuth(): Promise<GoogleUserInfo> {
       if (settled) return
       settled = true
       server?.close()
-      reject(new Error('Google OAuth timed out after 120 seconds'))
+      reject(new Error('Google sign-in timed out. Please try again.'))
     }, 120_000)
 
     server = http.createServer(async (req, res) => {
@@ -80,7 +80,7 @@ export async function startGoogleOAuth(): Promise<GoogleUserInfo> {
           settled = true
           clearTimeout(timeout)
           server?.close()
-          reject(new Error(`Google OAuth error: ${error}`))
+          reject(new Error('Google sign-in was cancelled.'))
         }
         return
       }
@@ -98,7 +98,7 @@ export async function startGoogleOAuth(): Promise<GoogleUserInfo> {
           settled = true
           clearTimeout(timeout)
           server?.close()
-          reject(new Error('OAuth state mismatch'))
+          reject(new Error('Google sign-in failed. Please try again.'))
         }
         return
       }
@@ -138,13 +138,14 @@ export async function startGoogleOAuth(): Promise<GoogleUserInfo> {
 
         if (!tokenResponse.ok) {
           const errText = await tokenResponse.text()
-          throw new Error(`Token exchange failed: ${tokenResponse.status} ${errText}`)
+          console.error('[google-oauth] token exchange failed:', tokenResponse.status, errText)
+          throw new Error('Google sign-in failed. Please try again.')
         }
 
         const tokenData = await tokenResponse.json() as { id_token?: string; access_token?: string }
 
         if (!tokenData.id_token) {
-          throw new Error('No id_token in token response')
+          throw new Error('Google sign-in failed. Please try again.')
         }
 
         const claims = decodeIdToken(tokenData.id_token)
@@ -155,8 +156,13 @@ export async function startGoogleOAuth(): Promise<GoogleUserInfo> {
           googleId: claims.sub,
           idToken: tokenData.id_token,
         })
-      } catch (err: any) {
-        reject(err)
+      } catch (err: unknown) {
+        if (err instanceof Error && /^Google sign-in/i.test(err.message)) {
+          reject(err)
+          return
+        }
+        console.error('[google-oauth] OAuth callback error:', err)
+        reject(new Error('Google sign-in failed. Please try again.'))
       }
     })
 
@@ -164,7 +170,8 @@ export async function startGoogleOAuth(): Promise<GoogleUserInfo> {
       if (!settled) {
         settled = true
         clearTimeout(timeout)
-        reject(err)
+        console.error('[google-oauth] local server error:', err)
+        reject(new Error('Google sign-in failed. Please try again.'))
       }
     })
 
@@ -195,7 +202,7 @@ export async function startGoogleOAuth(): Promise<GoogleUserInfo> {
           settled = true
           clearTimeout(timeout)
           server?.close()
-          reject(new Error(`Failed to open browser: ${err.message}`))
+          reject(new Error('Could not open your browser for Google sign-in. Please try again.'))
         }
       })
     })

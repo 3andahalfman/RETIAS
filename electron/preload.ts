@@ -38,6 +38,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDesktopSources: () => ipcRenderer.invoke('get-desktop-sources'),
   analyseScreen: () => ipcRenderer.invoke('screen:analyse'),
   captureScreen: (): Promise<string> => ipcRenderer.invoke('screen:capture'),
+  extractInstructionsFromScreen: (): Promise<string> => ipcRenderer.invoke('instructions:extract-from-screen'),
+  updateSessionExtraContext: (text: string) => ipcRenderer.send('session:update-extra-context', text),
   analyseScreens: (images: string[]): Promise<void> => ipcRenderer.invoke('screen:analyse-multi', images),
   sendManualPrompt: (text: string): Promise<void> => ipcRenderer.invoke('llm:manual-prompt', text),
   sendAudioChunk: (buffer: ArrayBuffer, sampleRate: number, source: 'mic' | 'system') =>

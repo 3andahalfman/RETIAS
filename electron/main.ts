@@ -1,4 +1,5 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, clipboard, desktopCapturer, screen, shell } from 'electron'
+import { app, BrowserWindow, globalShortcut, ipcMain, clipboard, desktopCapturer, screen, shell, nativeImage } from 'electron'
+import fs from 'node:fs'
 import { autoUpdater } from 'electron-updater'
 import { createOverlayWindow } from './overlay-window.js'
 import { IpcBus } from './ipc-bus.js'
@@ -308,6 +309,20 @@ function clamp(val: unknown, max: number, field: string): string {
   return s
 }
 
+async function capturePrimaryScreenBase64(): Promise<string> {
+  const primary = screen.getPrimaryDisplay()
+  const { width: pw, height: ph } = primary.size
+  const sources = await desktopCapturer.getSources({
+    types: ['screen'],
+    thumbnailSize: { width: pw, height: ph },
+  })
+  const source =
+    sources.find((s) => s.display_id === String(primary.id))
+    ?? sources[0]
+  if (!source) throw new Error('No screen source found')
+  return Buffer.from(source.thumbnail.toPNG()).toString('base64')
+}
+
 function requireString(val: unknown, field: string): string {
   if (typeof val !== 'string' || !val.trim()) throw new Error(`${field} is required`)
   return val.trim()
@@ -318,8 +333,27 @@ function requireString(val: unknown, field: string): string {
 // loopback audio callback even after setContentProtection(true) is active.
 let cachedScreenSource: any = null
 
+function applyAppBranding() {
+  app.setName('RETIAS')
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.retias.app')
+  }
+  const iconPaths = [
+    join(__dirname, '../../public/logo.png'),
+    join(__dirname, '../renderer/logo.png'),
+  ]
+  const iconPath = iconPaths.find((p) => fs.existsSync(p))
+  if (!iconPath) return
+  const icon = nativeImage.createFromPath(iconPath)
+  if (icon.isEmpty()) return
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(icon)
+  }
+}
+
 async function bootstrap() {
   await app.whenReady()
+  applyAppBranding()
 
   // Grant microphone permission
   const { session } = await import('electron/main')
@@ -505,18 +539,14 @@ async function bootstrap() {
   // so users can keep the AI/answer panel on a secondary monitor.
   ipcMain.handle('screen:capture', async () => {
     if (!currentUserIsPremium) throw new Error('Screen Analysis is a premium feature. Upgrade your account to use it.')
-    const primary = screen.getPrimaryDisplay()
-    const { width: pw, height: ph } = primary.size
-    const sources = await desktopCapturer.getSources({
-      types: ['screen'],
-      thumbnailSize: { width: pw, height: ph },
-    })
-    const source =
-      sources.find((s) => s.display_id === String(primary.id))
-      ?? sources[0]
-    if (!source) throw new Error('No screen source found')
-    const png = source.thumbnail.toPNG()
-    return Buffer.from(png).toString('base64')
+    return capturePrimaryScreenBase64()
+  })
+
+  ipcMain.handle('instructions:extract-from-screen', async () => {
+    if (!currentUserIsPremium) throw new Error('Screen Analysis is a premium feature. Upgrade your account to use it.')
+    const base64 = await capturePrimaryScreenBase64()
+    const { extractInstructionsFromScreenshot } = await import('./lib/instruction-extract.js')
+    return extractInstructionsFromScreenshot(base64)
   })
 
   // Send multiple captured screenshots to LLM worker for batch analysis
@@ -559,6 +589,11 @@ async function bootstrap() {
 
   ipcMain.on('session:stop', () => {
     ipcBus.stopSession()
+  })
+
+  ipcMain.on('session:update-extra-context', (_event, text: unknown) => {
+    const safe = clamp(text ?? '', LIMITS.extraCtx, 'extraContext')
+    ipcBus.emit('session:extra-context', safe)
   })
 
   ipcMain.on('copy-answer', (_event, text: string) => {

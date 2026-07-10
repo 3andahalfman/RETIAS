@@ -2701,6 +2701,95 @@ html, body, #root {
   color: rgba(255, 255, 255, 0.35);
   padding: 8px 28px 10px;
 }
+.online-test-instructions-section {
+  padding: 0 28px 8px;
+  max-width: none;
+}
+.project-instructions-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.project-instructions-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.project-instructions-capture-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(167, 139, 250, 0.85);
+  white-space: nowrap;
+}
+.project-instructions-textarea {
+  min-height: 220px;
+  width: 100%;
+  resize: vertical;
+}
+.project-instructions-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.project-instructions-capture-btn,
+.project-instructions-apply-btn {
+  font-size: 12px;
+  padding: 8px 14px;
+}
+.project-instructions-error {
+  margin: 0;
+  font-size: 12px;
+  color: #f87171;
+}
+.project-instructions-panel {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+.project-instructions-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+.project-instructions-toggle:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.project-instructions-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(20, 184, 166, 0.18);
+  color: #5eead4;
+}
+.project-instructions-chevron {
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 11px;
+}
+.project-instructions-body {
+  padding: 0 10px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.project-instructions-body .project-instructions-textarea {
+  min-height: 160px;
+}
+.project-instructions-body .setup-label {
+  margin-top: 8px;
+}
 .online-test-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -3341,6 +3430,20 @@ html, body, #root {
   transition: color 0.15s;
 }
 .login-register-link-btn:hover { color: #7CA0EE; }
+
+.login-legal-links {
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+  text-align: center;
+  margin-top: 12px;
+}
+.login-legal-links a {
+  color: rgba(255,255,255,0.45);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.login-legal-links a:hover { color: rgba(255,255,255,0.65); }
+
 .login-card {
   width: 100%;
   max-width: 380px;
@@ -5008,6 +5111,15 @@ html, body, #root {
   padding-bottom: 6px;
   min-height: 0;
   gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.panel-header-row--tools-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
 }
 
 .panel-tool-group {

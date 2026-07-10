@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { friendlyAuthError } from '../lib/friendly-auth-error'
 import WindowControls from './WindowControls'
 
 interface Props {
@@ -62,25 +63,6 @@ export default function LoginPage({ onLogin, isDocked, onDock, onUndock }: Props
     window.electronAPI?.authGoogleAvailable?.().then(setGoogleAvailable).catch(() => {})
     window.electronAPI?.authDeviceOwner?.().then((email) => setDeviceOwnerEmail(email)).catch(() => {})
   }, [])
-
-  const friendlyAuthError = (err: any): string => {
-    const msg: string = (err?.message ?? '').toLowerCase()
-    if (msg.includes('invalid login') || msg.includes('invalid credentials') || msg.includes('email not confirmed') || msg.includes('wrong password'))
-      return 'Wrong email or password. Please try again.'
-    if (msg.includes('user already registered') || msg.includes('already exists'))
-      return 'An account with this email already exists. Try signing in.'
-    if (msg.includes('email') && msg.includes('not found'))
-      return 'No account found with this email.'
-    if (msg.includes('rate limit') || msg.includes('too many'))
-      return 'Too many attempts. Please wait a moment and try again.'
-    if (msg.includes('network') || msg.includes('fetch'))
-      return 'Network error. Please check your connection.'
-    if (msg.includes('already registered to another') || msg.includes('device_bound'))
-      return 'This computer is registered to another account. Sign in with that account or use a different device.'
-    if (msg.includes('device_cooldown') || msg.includes('wait one hour'))
-      return 'This device was recently signed out. Please wait one hour before signing in with a different account.'
-    return err?.message ?? 'Something went wrong. Please try again.'
-  }
 
   const handleSignIn = async () => {
     if (!email.trim()) { setError('Please enter your email.'); return }
@@ -260,6 +242,12 @@ export default function LoginPage({ onLogin, isDocked, onDock, onUndock }: Props
                 Create one on the website
               </button>
             </div>
+
+            <p className="login-legal-links">
+              <a href="https://www.retiasai.com/terms" target="_blank" rel="noopener noreferrer">Terms of Use</a>
+              {' · '}
+              <a href="https://www.retiasai.com/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+            </p>
           </div>
         </div>
       </div>

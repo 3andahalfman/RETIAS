@@ -11,6 +11,7 @@ import AnswerSelectionToolbar from './AnswerSelectionToolbar'
 import { replacePlainSelectionInMarkdown } from '../lib/markdown-selection'
 import { displayQuestionText } from '../lib/question-text'
 import { getMeetingPromptLabel } from '../lib/meeting-types'
+import ProjectInstructionsPanel from './ProjectInstructionsPanel'
 import { useTextSelection } from '../lib/use-text-selection'
 
 interface AnswerEntry {
@@ -26,6 +27,9 @@ const FONT_SIZES = [13, 15, 17, 19]
 interface Props {
   isPremium?: boolean
   isOnlineTest?: boolean
+  isProjectOnboarding?: boolean
+  projectInstructions?: string
+  onApplyProjectInstructions?: (instructions: string) => void
   isMeeting?: boolean
   meetingType?: 'standup' | 'general'
   isStarted?: boolean
@@ -41,6 +45,9 @@ interface Props {
 export default function AnswerPanel({
   isPremium = false,
   isOnlineTest = false,
+  isProjectOnboarding = false,
+  projectInstructions = '',
+  onApplyProjectInstructions,
   isMeeting = false,
   meetingType,
   isStarted = false,
@@ -331,11 +338,19 @@ export default function AnswerPanel({
 
         {isOnlineTest && (
           <div className="panel-header-row panel-header-row--tools">
-            <div className="panel-tool-group panel-tool-group--screen">
-              {screenTools}
-            </div>
-            <div className="panel-tool-group panel-tool-group--answer">
-              {autoTypeTool}
+            {isProjectOnboarding && onApplyProjectInstructions && (
+              <ProjectInstructionsPanel
+                instructions={projectInstructions}
+                onApply={onApplyProjectInstructions}
+              />
+            )}
+            <div className="panel-header-row panel-header-row--tools-inner">
+              <div className="panel-tool-group panel-tool-group--screen">
+                {screenTools}
+              </div>
+              <div className="panel-tool-group panel-tool-group--answer">
+                {autoTypeTool}
+              </div>
             </div>
           </div>
         )}

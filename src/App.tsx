@@ -22,6 +22,7 @@ import Settings, { loadSettings } from './components/Settings'
 import { isAdminEmail } from './lib/admin'
 import { hasPremiumPlusAccess } from './lib/premium-access'
 import { getAssessmentTypeLabel } from './lib/assessment-types'
+import { PROJECT_ONBOARDING_TYPE } from './lib/project-onboarding'
 import { getMeetingTypeLabel } from './lib/meeting-types'
 import { invalidateSupabaseSessionSync } from './lib/supabase'
 import PricingPage from './components/PricingPage'
@@ -198,20 +199,37 @@ export default function App() {
     setIsOnlineTest(false)
   }
 
-  const handleCreateOnlineTest = (testType: string) => {
+  const handleCreateOnlineTest = (testType: string, extraContext?: string) => {
     const appSettings = loadSettings()
     let aiModel = appSettings.aiModel
     if (aiModel === 'claude-opus-4-5' && !user?.is_premium) {
       aiModel = 'claude-sonnet-4-6'
     }
-    setSessionConfig({ testType, aiModel, sessionType: 'interview', company: '', jobUrl: '', jobDescription: '', resumeText: '', language: '', extraContext: '', autoGenerate: false })
+    const instructions = extraContext?.trim() ?? ''
+    setSessionConfig({
+      testType,
+      aiModel,
+      sessionType: 'interview',
+      company: '',
+      jobUrl: '',
+      jobDescription: '',
+      resumeText: '',
+      language: '',
+      extraContext: instructions,
+      autoGenerate: false,
+    })
     setView('session')
-    window.electronAPI?.startSession({ testType, aiModel })
+    window.electronAPI?.startSession({ testType, aiModel, extraContext: instructions })
     setSessionActive(true)
-    setIsStarted(true) // auto-start — no intro needed
-    setMicActive(false) // no mic for online tests
+    setIsStarted(true)
+    setMicActive(false)
     setIsOnlineTest(true)
     setIsMeeting(false)
+  }
+
+  const handleApplyProjectInstructions = (instructions: string) => {
+    setSessionConfig((prev) => (prev ? { ...prev, extraContext: instructions } : prev))
+    window.electronAPI?.updateSessionExtraContext?.(instructions)
   }
 
   const handleStartSession = () => setIsStarted(true)
@@ -559,6 +577,9 @@ export default function App() {
           <AnswerPanel
             isPremium={user?.is_premium ?? false}
             isOnlineTest={isOnlineTest}
+            isProjectOnboarding={isOnlineTest && sessionConfig?.testType === PROJECT_ONBOARDING_TYPE}
+            projectInstructions={sessionConfig?.extraContext ?? ''}
+            onApplyProjectInstructions={handleApplyProjectInstructions}
             isMeeting={isMeeting}
             meetingType={sessionConfig?.meetingType}
             isStarted={isStarted}

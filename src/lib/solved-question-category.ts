@@ -37,7 +37,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   'data-science': 'Data Science',
   'coding-other': 'Coding (Other)',
   coding: 'Coding (Other)',
-  onboarding: 'Onboarding / Compliance',
+  onboarding: 'Project Onboarding',
   technical: 'Technical',
 }
 

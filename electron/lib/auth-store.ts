@@ -168,12 +168,7 @@ export async function findOrCreateGoogleUser(
   }
 
   // Never call signUp for an existing Google account — Supabase returns phantom user IDs.
-  throw new Error(
-    'Could not link your Google account. '
-    + 'In Supabase → Authentication → Providers → Google, add the same Google Client ID '
-    + 'RETIAS uses in .env (GOOGLE_CLIENT_ID). '
-    + `Details: ${idTokenMsg}`,
-  )
+  throw new Error('Could not sign in with Google. Please try again or use email and password.')
 }
 
 export async function getUserById(userId: string): Promise<User | null> {

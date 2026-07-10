@@ -14,6 +14,21 @@ import { AnswerCache } from '../lib/cache.js'
 
 const DEFAULT_MODEL = 'claude-sonnet-4-6'
 const MAX_TOKENS = 1200
+const PROJECT_INSTRUCTIONS_MAX = 4000
+
+function appendProjectInstructions(basePrompt: string, testType: string | null, extraContext: string | null | undefined): string {
+  const trimmed = (extraContext ?? '').trim()
+  if (!trimmed || testType !== 'onboarding') return basePrompt
+  const sanitized = trimmed.substring(0, PROJECT_INSTRUCTIONS_MAX)
+  return `${basePrompt}
+
+PROJECT INSTRUCTIONS (authoritative — follow these over generic assumptions):
+${sanitized}`
+}
+
+function buildScreenSystemPrompt(testType: string | null, extraContext: string | null | undefined): string {
+  return appendProjectInstructions(getScreenAnalysisPrompt(testType), testType, extraContext)
+}
 
 function isOpenAIModel(model: string) {
   return model.startsWith('gpt-') || model.startsWith('o1') || model.startsWith('o3')
@@ -77,12 +92,13 @@ For each visible question:
 - MCQ → letter + ≤1 sentence reason. No real-world interpretation unless asked.${FORMAT}`
 
     case 'onboarding':
-      return `You are a Compliance, HR, and Corporate Policy Expert.
+      return `You are a Project Onboarding assistant helping with company onboarding, training modules, and role-specific policy questions.
 
 For each visible question:
-- MCQ → letter + ≤1 sentence citing the policy principle at stake.
-- Scenario → the recommended action in 1–2 sentences (name the regulation if applicable).
-- Skip option-by-option elimination, escalation reminders, and meta-commentary on how to take the test.${FORMAT}`
+- When PROJECT INSTRUCTIONS are provided, treat them as authoritative for company/project facts.
+- MCQ → letter + ≤1 sentence grounded in those instructions or visible content.
+- Scenario → recommended action in 1–2 sentences.
+- Skip option-by-option elimination and meta-commentary on how to take the test.${FORMAT}`
 
     case 'general':
       return `You are a versatile assessment assistant for any online test, quiz, or training module.
@@ -414,6 +430,7 @@ export class LLMWorker {
   private isGenerating = false
   private activeModel: string = DEFAULT_MODEL
   private sessionTestType: string | null = null
+  private sessionExtraContext: string = ''
   private sessionUserId: string | null = null
   private sessionUserEmail: string | null = null
   private sessionId: string | null = null
@@ -429,12 +446,13 @@ export class LLMWorker {
   // Stored handler references for proper cleanup
   private contextHandler: ((systemPrompt: string, userMessage: string, questionText: string, questionType: string) => void) | null = null
   private regenerateHandler: (() => void) | null = null
-  private sessionStartedHandler: ((config: { testType?: string; aiModel?: string; userId?: string; userEmail?: string }) => void) | null = null
+  private sessionStartedHandler: ((config: { testType?: string; aiModel?: string; userId?: string; userEmail?: string; extraContext?: string }) => void) | null = null
   private sessionIdHandler: ((id: string) => void) | null = null
   private sessionStoppedHandler: (() => void) | null = null
   private screenAnalyseHandler: ((base64Image: string) => void) | null = null
   private screenAnalyseMultiHandler: ((images: string[]) => void) | null = null
   private manualPromptHandler: ((prompt: string) => void) | null = null
+  private extraContextHandler: ((extraContext: string) => void) | null = null
 
   constructor(ipcBus: IpcBus) {
     this.ipcBus = ipcBus
@@ -473,6 +491,7 @@ export class LLMWorker {
 
     this.sessionStartedHandler = (config) => {
       this.sessionTestType = config?.testType ?? null
+      this.sessionExtraContext = config?.extraContext?.trim() ?? ''
       this.sessionUserId = config?.userId ?? null
       this.sessionUserEmail = config?.userEmail ?? null
       this.sessionId = null
@@ -485,6 +504,7 @@ export class LLMWorker {
     }
     this.sessionStoppedHandler = () => {
       this.sessionTestType = null
+      this.sessionExtraContext = ''
       this.sessionUserId = null
       this.sessionUserEmail = null
       this.sessionId = null
@@ -494,6 +514,11 @@ export class LLMWorker {
     this.screenAnalyseMultiHandler = (images) => { this.analyseScreenMulti(images) }
     this.manualPromptHandler = (prompt) => { this.answerManualPrompt(prompt) }
 
+    this.extraContextHandler = (extraContext) => {
+      this.sessionExtraContext = extraContext.trim()
+      console.log(`[LLMWorker] Project instructions updated (${this.sessionExtraContext.length} chars)`)
+    }
+
     this.ipcBus.on('session:started', this.sessionStartedHandler)
     this.ipcBus.on('session:id', this.sessionIdHandler)
     this.ipcBus.on('session:stopped', this.sessionStoppedHandler)
@@ -502,6 +527,7 @@ export class LLMWorker {
     this.ipcBus.on('screen:analyse', this.screenAnalyseHandler)
     this.ipcBus.on('screen:analyse-multi', this.screenAnalyseMultiHandler)
     this.ipcBus.on('llm:manual-prompt', this.manualPromptHandler)
+    this.ipcBus.on('session:extra-context', this.extraContextHandler)
   }
 
   /** Abort the active stream if one is running, returns true if aborted */
@@ -635,7 +661,7 @@ export class LLMWorker {
       const userText = 'Solve every question visible on this screen. No preamble, no recap, no advice on delivery — just the answers.'
 
       console.log(`[LLMWorker] Analysing screen (model: ${this.activeModel}, fresh context)`)
-      const systemPrompt = getScreenAnalysisPrompt(this.sessionTestType)
+      const systemPrompt = buildScreenSystemPrompt(this.sessionTestType, this.sessionExtraContext)
 
       if (isOpenAIModel(this.activeModel)) {
         this.abortController = new AbortController()
@@ -715,7 +741,7 @@ export class LLMWorker {
       const userText = `Solve every question visible across these ${images.length} screenshot${images.length === 1 ? '' : 's'}. No preamble, no recap, no advice on delivery — just the answers.`
 
       console.log(`[LLMWorker] Analysing ${images.length} screenshots (model: ${this.activeModel}, fresh context)`)
-      const systemPrompt = getScreenAnalysisPrompt(this.sessionTestType)
+      const systemPrompt = buildScreenSystemPrompt(this.sessionTestType, this.sessionExtraContext)
 
       if (isOpenAIModel(this.activeModel)) {
         this.abortController = new AbortController()
@@ -791,7 +817,7 @@ export class LLMWorker {
 
     // Pick the best available system prompt for the current session context
     const systemPrompt = this.lastContext?.systemPrompt
-      ?? (this.sessionTestType ? getScreenAnalysisPrompt(this.sessionTestType) : null)
+      ?? (this.sessionTestType ? buildScreenSystemPrompt(this.sessionTestType, this.sessionExtraContext) : null)
       ?? 'You are an expert AI assistant. Answer the user\'s question clearly, concisely, and accurately.'
 
     const shortTitle = prompt.length > 60 ? prompt.slice(0, 57) + '…' : prompt
@@ -914,6 +940,10 @@ export class LLMWorker {
     if (this.manualPromptHandler) {
       this.ipcBus.removeListener('llm:manual-prompt', this.manualPromptHandler)
       this.manualPromptHandler = null
+    }
+    if (this.extraContextHandler) {
+      this.ipcBus.removeListener('session:extra-context', this.extraContextHandler)
+      this.extraContextHandler = null
     }
   }
 }

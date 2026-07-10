@@ -1,7 +1,6 @@
 import { useState, type ComponentType, type CSSProperties } from 'react'
 import WindowControls from './WindowControls'
 import {
-  IconAiMl,
   IconCoding,
   IconGeneral,
   IconNumerical,
@@ -14,8 +13,11 @@ import {
   type OnlineTestAccent,
 } from './OnlineTestIcons'
 
+import ProjectInstructionsFields from './ProjectInstructionsFields'
+import { PROJECT_ONBOARDING_TYPE } from '../lib/project-onboarding'
+
 interface Props {
-  onStart: (testType: string) => void
+  onStart: (testType: string, extraContext?: string) => void
   onBack: () => void
   onDock: () => void
 }
@@ -42,13 +44,6 @@ const TEST_TYPES: {
     Icon: IconCoding,
   },
   {
-    id: 'ai-ml',
-    label: 'AI / ML Test',
-    desc: 'Machine learning, data science & statistics',
-    accent: ONLINE_TEST_ACCENTS.violet,
-    Icon: IconAiMl,
-  },
-  {
     id: 'numerical',
     label: 'Numerical Reasoning',
     desc: 'Maths, aptitude & number series',
@@ -64,9 +59,9 @@ const TEST_TYPES: {
   },
   {
     id: 'onboarding',
-    label: 'Onboarding / Compliance',
-    desc: 'Company policy, H&S & e-learning modules',
-    accent: ONLINE_TEST_ACCENTS.teal,
+    label: 'Project Onboarding',
+    desc: 'Company onboarding, training modules & role-specific policy',
+    accent: ONLINE_TEST_ACCENTS.violet,
     Icon: IconOnboarding,
   },
   {
@@ -80,6 +75,12 @@ const TEST_TYPES: {
 
 export default function OnlineTestSetup({ onStart, onBack, onDock }: Props) {
   const [selected, setSelected] = useState<string | null>(null)
+  const [instructions, setInstructions] = useState('')
+
+  const handleSelect = (id: string) => {
+    setSelected(id)
+    if (id !== PROJECT_ONBOARDING_TYPE) setInstructions('')
+  }
 
   return (
     <div className="setup-root online-test-root">
@@ -108,7 +109,7 @@ export default function OnlineTestSetup({ onStart, onBack, onDock }: Props) {
               type="button"
               className={`online-test-card${selected === id ? ' selected' : ''}`}
               style={{ '--ot-accent': accent.color, '--ot-accent-bg': accent.bg, '--ot-accent-border': accent.border } as CSSProperties}
-              onClick={() => setSelected(id)}
+              onClick={() => handleSelect(id)}
             >
               <div className="online-test-card-top">
                 <OnlineTestIconBadge accent={accent}>
@@ -120,6 +121,12 @@ export default function OnlineTestSetup({ onStart, onBack, onDock }: Props) {
             </button>
           ))}
         </div>
+
+        {selected === PROJECT_ONBOARDING_TYPE && (
+          <div className="online-test-instructions-section">
+            <ProjectInstructionsFields value={instructions} onChange={setInstructions} />
+          </div>
+        )}
       </div>
 
       <div className="setup-footer">
@@ -127,7 +134,11 @@ export default function OnlineTestSetup({ onStart, onBack, onDock }: Props) {
           type="button"
           className="setup-btn primary"
           disabled={!selected}
-          onClick={() => selected && onStart(selected)}
+          onClick={() => {
+            if (!selected) return
+            const extra = selected === PROJECT_ONBOARDING_TYPE ? instructions.trim() : undefined
+            onStart(selected, extra || undefined)
+          }}
         >
           Start Assessment →
         </button>
