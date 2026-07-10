@@ -167,7 +167,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateProgress: (cb: (percent: number) => void) => updateProgressFanout.subscribe(cb),
   onUpdateDownloaded: (cb: () => void) => updateDownloadedFanout.subscribe(cb),
   downloadUpdate: () => ipcRenderer.send('update:download'),
-  installUpdate: () => ipcRenderer.send('update:install'),
+  installUpdate: (): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('update:install'),
 
   // Window position (for draggable dock)
   getWindowPosition: () => ipcRenderer.invoke('window:get-position'),

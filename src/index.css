@@ -3874,6 +3874,20 @@ html, body, #root {
   font-size: 15px; padding: 13px 0;
   box-shadow: 0 4px 20px rgba(76, 175, 80, 0.35);
 }
+.force-update-btn-secondary {
+  background: transparent;
+  border: 1px solid #1A2540;
+  color: var(--text-muted);
+  box-shadow: none;
+}
+.force-update-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.04);
+  opacity: 1;
+}
+.force-update-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 .update-ready-overlay { z-index: 25000; }
 @keyframes update-ready-pop {
   from { transform: scale(0.96); opacity: 0.7; }

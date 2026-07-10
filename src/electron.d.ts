@@ -206,7 +206,7 @@ interface ElectronAPI {
   onUpdateProgress?: (cb: (percent: number) => void) => () => void
   onUpdateDownloaded?: (cb: () => void) => () => void
   downloadUpdate?: () => void
-  installUpdate?: () => void
+  installUpdate?: () => Promise<{ ok: boolean; error?: string }>
 
   // Auto-Typer
   autoTypeStart?: (opts: {

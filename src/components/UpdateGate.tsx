@@ -6,6 +6,7 @@ import {
   syncUpdateDownloadState,
   useAppNotifications,
 } from '../lib/notification-store'
+import { isUpdateSkipped, skipUpdateVersion } from '../lib/update-skip'
 
 type UpdateCheckStatus = 'skipped' | 'checking' | 'up-to-date' | 'available' | 'error'
 
@@ -13,8 +14,10 @@ interface UpdateGateProps {
   onPassed: () => void
 }
 
-function passesGate(status: UpdateCheckStatus): boolean {
-  return status === 'skipped' || status === 'up-to-date'
+function passesGate(status: UpdateCheckStatus, version?: string | null): boolean {
+  if (status === 'skipped' || status === 'up-to-date') return true
+  if (status === 'available' && version && isUpdateSkipped(version)) return true
+  return false
 }
 
 function UpdateGateShell({
@@ -64,7 +67,7 @@ export default function UpdateGate({ onPassed }: UpdateGateProps) {
     setCheckStatus(result.status)
     if (result.version) setVersion(result.version)
     syncUpdateDownloadState(result)
-    if (passesGate(result.status)) onPassed()
+    if (passesGate(result.status, result.version)) onPassed()
   }, [onPassed])
 
   useEffect(() => {
@@ -93,6 +96,11 @@ export default function UpdateGate({ onPassed }: UpdateGateProps) {
     const id = window.setInterval(poll, 400)
     return () => { cancelled = true; window.clearInterval(id) }
   }, [phase, progress])
+
+  const handleSkip = () => {
+    if (version) skipUpdateVersion(version)
+    onPassed()
+  }
 
   const handleRetry = () => {
     setCheckStatus('checking')
@@ -160,7 +168,7 @@ export default function UpdateGate({ onPassed }: UpdateGateProps) {
     if (phase === 'ready') {
       return (
         <UpdateGateShell className="update-gate-root" onDock={handleDock}>
-          <UpdateReadyOverlay version={version} fullscreen />
+          <UpdateReadyOverlay version={version} fullscreen onSkip={handleSkip} />
         </UpdateGateShell>
       )
     }
@@ -189,6 +197,14 @@ export default function UpdateGate({ onPassed }: UpdateGateProps) {
                 </p>
                 <button type="button" className="force-update-btn" onClick={downloadUpdate}>
                   Download update
+                </button>
+                <button
+                  type="button"
+                  className="force-update-btn force-update-btn-secondary"
+                  onClick={handleSkip}
+                  style={{ marginTop: 10 }}
+                >
+                  Skip for now
                 </button>
               </>
             )}

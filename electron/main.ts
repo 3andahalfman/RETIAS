@@ -963,15 +963,47 @@ async function bootstrap() {
       })
   })
 
-  ipcMain.on('update:install', () => {
-    if (!app.isPackaged) return
-    if (!updateDownloaded) {
-      logger.warn('[Updater] install requested before download completed')
-      console.warn('[Updater] install requested before download completed')
-      return
+  ipcMain.handle('update:install', async () => {
+    const fail = (error: string) => {
+      logger.warn('[Updater] Install failed:', error)
+      console.warn('[Updater] Install failed:', error)
+      return { ok: false as const, error }
     }
-    // NSIS non-oneClick: show installer UI, then relaunch app when done.
-    autoUpdater.quitAndInstall(false, true)
+
+    if (!app.isPackaged) {
+      return fail('Updates can only be installed in the packaged app.')
+    }
+
+    if (!updateDownloaded) {
+      if (updateDownloadPromise) {
+        try {
+          await updateDownloadPromise
+          markUpdateDownloaded(updateAvailableVersion)
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Download incomplete'
+          return fail(msg)
+        }
+      } else {
+        return fail('Update is not ready to install yet. Wait for the download to finish.')
+      }
+    }
+
+    logger.log('[Updater] quitAndInstall — version:', updateAvailableVersion ?? 'unknown')
+    console.log('[Updater] quitAndInstall starting')
+
+    try {
+      ipcBus?.stopSession()
+      // oneClick=false NSIS — run installer UI, then relaunch when done.
+      autoUpdater.quitAndInstall(false, true)
+      setTimeout(() => {
+        logger.warn('[Updater] quitAndInstall did not exit — forcing quit')
+        app.exit(0)
+      }, 4000)
+      return { ok: true as const }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Install failed'
+      return fail(msg)
+    }
   })
 
   // Mock interview — generates a job description from the candidate's resume

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 
+import { skipUpdateVersion, isUpdateSkipped } from './update-skip'
+
 export type UpdatePhase = 'idle' | 'available' | 'downloading' | 'ready'
 export type UpdateDownloadPhase = 'idle' | 'downloading' | 'ready'
 
@@ -149,8 +151,19 @@ export function syncUpdateDownloadState(result: {
   }
 }
 
-export function installUpdate() {
-  window.electronAPI?.installUpdate?.()
+export function skipUpdate(version: string) {
+  skipUpdateVersion(version)
+  patch({ dismissed: true, unread: false })
+}
+
+export async function installUpdate(): Promise<string | null> {
+  try {
+    const result = await window.electronAPI?.installUpdate?.()
+    if (result && !result.ok) return result.error ?? 'Install failed'
+    return null
+  } catch (err) {
+    return err instanceof Error ? err.message : 'Install failed'
+  }
 }
 
 export function subscribeNotifications(fn: Listener) {
@@ -178,5 +191,7 @@ export function useAppNotifications() {
     dismiss: dismissNotification,
     download: downloadUpdate,
     install: installUpdate,
+    skip: skipUpdate,
+    isSkipped: (version: string) => isUpdateSkipped(version),
   }
 }

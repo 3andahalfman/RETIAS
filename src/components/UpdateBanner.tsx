@@ -2,10 +2,16 @@ import UpdateReadyOverlay from './UpdateReadyOverlay'
 import { useAppNotifications } from '../lib/notification-store'
 
 export default function UpdateBanner() {
-  const { visible, phase, version, progress, dismiss, download } = useAppNotifications()
+  const { visible, phase, version, progress, dismissed, dismiss, download, skip } = useAppNotifications()
 
-  if (phase === 'ready') {
-    return <UpdateReadyOverlay version={version} fullscreen />
+  if (phase === 'ready' && !dismissed) {
+    return (
+      <UpdateReadyOverlay
+        version={version}
+        fullscreen
+        onSkip={() => skip(version)}
+      />
+    )
   }
 
   if (!visible) return null
@@ -19,6 +25,9 @@ export default function UpdateBanner() {
           </span>
           <button type="button" className="update-banner-btn primary" onClick={download}>
             Download
+          </button>
+          <button type="button" className="update-banner-btn dismiss" onClick={() => skip(version)} title="Skip this version">
+            Skip
           </button>
           <button type="button" className="update-banner-btn dismiss" onClick={dismiss}>✕</button>
         </>
