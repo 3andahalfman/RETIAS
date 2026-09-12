@@ -1,3 +1,4 @@
+import { clipboard } from 'electron'
 import { EventEmitter } from 'node:events'
 
 // Lazy-load nut-js so the native libnut binaries are only resolved when the
@@ -354,6 +355,23 @@ export class AutoTyper extends EventEmitter {
         }
       }
 
+      const pasteMod = process.platform === 'darwin' ? Key.LeftSuper : Key.LeftControl
+
+      /** Paste a single character — avoids libnut typeString Alt+numpad on Windows. */
+      const pasteChar = async (ch: string): Promise<void> => {
+        const saved = clipboard.readText()
+        clipboard.writeText(ch)
+        try {
+          await sleep(15, session)
+          await keyboard.pressKey(pasteMod, Key.V)
+          await keyboard.releaseKey(pasteMod, Key.V)
+          // Let the target app consume the paste before restoring clipboard.
+          await sleep(40, session)
+        } finally {
+          clipboard.writeText(saved)
+        }
+      }
+
       const typeChar = async (ch: string): Promise<void> => {
         if (ch === '\n') {
           await tapKey(Key.Enter)
@@ -373,8 +391,9 @@ export class AutoTyper extends EventEmitter {
         } else if (ch in PLAIN_PUNCT) {
           await tapKey(Key[PLAIN_PUNCT[ch] as keyof typeof Key])
         } else {
-          // Unicode prose (en/em dashes, curly quotes, etc.) — best-effort fallback.
-          await keyboard.type(ch)
+          // Unicode (en/em dashes, curly quotes, etc.) and unmapped ASCII — libnut
+          // typeString uses Alt+numpad on Windows, which steals focus and triggers shortcuts.
+          await pasteChar(ch)
         }
       }
 
@@ -382,15 +401,35 @@ export class AutoTyper extends EventEmitter {
         await tapKey(Key.Backspace)
       }
 
+      /**
+       * Per-keystroke delay with human-like variance. `jitterPct` scales both
+       * the spread around the mean interval and optional word/punctuation pauses;
+       * at 0 the delay is a flat meanIntervalMs (no humanization extras).
+       */
       const perCharDelay = (ch: string): number => {
-        const jitter = (Math.random() - 0.5) * 2 * session.jitterPct * session.meanIntervalMs
-        let delay = Math.max(5, session.meanIntervalMs + jitter)
-        if (ch === '\n' || ch === '.' || ch === '!' || ch === '?') {
-          delay += 80 + Math.random() * 180
+        const { meanIntervalMs, jitterPct } = session
+        if (jitterPct <= 0) return meanIntervalMs
+
+        // Wider than ±pct of mean: mix fast bursts and occasional slow keys so
+        // variation is perceptible even at moderate WPM.
+        const spread = jitterPct * meanIntervalMs * 2.5
+        const jitter = (Math.random() - 0.5) * 2 * spread
+        let delay = meanIntervalMs + jitter
+
+        if (ch === ' ') {
+          delay += 50 + Math.random() * 150 * jitterPct
+        } else if (ch === '\n' || ch === '.' || ch === '!' || ch === '?') {
+          delay += 80 + Math.random() * 220 * Math.max(0.5, jitterPct)
         } else if (ch === ',' || ch === ';' || ch === ':') {
-          delay += 30 + Math.random() * 80
+          delay += 30 + Math.random() * 100 * Math.max(0.5, jitterPct)
         }
-        return delay
+
+        // Occasional brief "thinking" hitch — probability scales with jitter.
+        if (Math.random() < jitterPct * 0.1) {
+          delay += 100 + Math.random() * 350
+        }
+
+        return Math.max(Math.round(meanIntervalMs * 0.2), Math.round(delay))
       }
 
       for (const token of tokens) {

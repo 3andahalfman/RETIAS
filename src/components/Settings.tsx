@@ -73,6 +73,10 @@ export function loadSettings(): AppSettings {
         merged.aiModel = DEFAULT_SETTINGS.aiModel
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged))
       }
+      // Legacy saves sometimes stored jitter as a whole-number percent (e.g. 20).
+      if (merged.autoTyperJitterPct > 1) {
+        merged.autoTyperJitterPct = Math.min(0.7, merged.autoTyperJitterPct / 100)
+      }
       return merged
     }
   } catch {}

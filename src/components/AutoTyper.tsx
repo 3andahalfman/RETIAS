@@ -23,6 +23,10 @@ function formatRemaining(ms: number): string {
   return `${m}m ${s.toString().padStart(2, '0')}s`
 }
 
+function countWords(text: string): number {
+  return text.trim() ? text.trim().split(/\s+/).length : 0
+}
+
 function stateLabel(state: EngineState): string {
   switch (state) {
     case 'idle': return 'Ready'
@@ -68,6 +72,7 @@ export default function AutoTyper({ onDock, locked, onUpgrade }: Props) {
 
   const isRunning = engineState !== 'idle' && engineState !== 'done' && engineState !== 'error'
   const charCount = text.length
+  const wordCount = countWords(text)
   const canStart = !isRunning && charCount > 0
 
   const handleStart = async () => {
@@ -180,7 +185,9 @@ export default function AutoTyper({ onDock, locked, onUpgrade }: Props) {
               </span>
             </div>
             <div className="auto-typer-text-actions">
-              <span className="auto-typer-char-count">{charCount.toLocaleString()} chars</span>
+              <span className="auto-typer-char-count">
+                {charCount.toLocaleString()} chars · {wordCount.toLocaleString()} words
+              </span>
               <button
                 type="button"
                 className="auto-typer-mini-btn"
