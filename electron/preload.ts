@@ -146,6 +146,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listCvs: () => ipcRenderer.invoke('cv:list'),
   deleteCv: (cvId: string) => ipcRenderer.invoke('cv:delete', cvId),
 
+  listProjects: () => ipcRenderer.invoke('project:list'),
+  getProject: (projectId: string) => ipcRenderer.invoke('project:get', projectId),
+  saveProject: (payload: { id?: string; name: string; instructions: string; folderPath?: string | null }) =>
+    ipcRenderer.invoke('project:save', payload),
+  deleteProject: (projectId: string) => ipcRenderer.invoke('project:delete', projectId),
+  addProjectFile: (projectId: string, name: string, content: string) =>
+    ipcRenderer.invoke('project:add-file', projectId, name, content),
+  deleteProjectFile: (fileId: string) => ipcRenderer.invoke('project:delete-file', fileId),
+  pickProjectFolder: () => ipcRenderer.invoke('project:pick-folder') as Promise<{
+    folderPath: string | null
+    files: Array<{ name: string; content: string }>
+  }>,
+  readProjectFolder: (folderPath: string) => ipcRenderer.invoke('project:read-folder', folderPath) as Promise<{
+    folderPath: string | null
+    files: Array<{ name: string; content: string }>
+  }>,
+
   listSolvedQuestions: () => ipcRenderer.invoke('solved:list-questions'),
 
   // Auto-updater
@@ -211,6 +228,8 @@ interface SessionConfig {
   language?: string
   aiModel?: string
   extraContext?: string
+  projectId?: string
+  projectContext?: string
   autoGenerate?: boolean
   jobUrl?: string
   userId?: string

@@ -1,7 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import { IpcBus } from '../ipc-bus.js'
-import { AnswerCache } from '../lib/cache.js'
+import { AnswerCache, contextScopeHash } from '../lib/cache.js'
+import { appendProjectContext } from '../lib/project-context.js'
 
 /**
  * LLM Worker — Phase 6
@@ -14,20 +15,12 @@ import { AnswerCache } from '../lib/cache.js'
 
 const DEFAULT_MODEL = 'claude-sonnet-4-6'
 const MAX_TOKENS = 1200
-const PROJECT_INSTRUCTIONS_MAX = 4000
-
-function appendProjectInstructions(basePrompt: string, testType: string | null, extraContext: string | null | undefined): string {
-  const trimmed = (extraContext ?? '').trim()
-  if (!trimmed || testType !== 'onboarding') return basePrompt
-  const sanitized = trimmed.substring(0, PROJECT_INSTRUCTIONS_MAX)
-  return `${basePrompt}
-
-PROJECT INSTRUCTIONS (authoritative — follow these over generic assumptions):
-${sanitized}`
-}
-
-function buildScreenSystemPrompt(testType: string | null, extraContext: string | null | undefined): string {
-  return appendProjectInstructions(getScreenAnalysisPrompt(testType), testType, extraContext)
+function buildScreenSystemPrompt(
+  testType: string | null,
+  projectContext: string | null | undefined,
+  extraContext: string | null | undefined,
+): string {
+  return appendProjectContext(getScreenAnalysisPrompt(testType), projectContext, extraContext)
 }
 
 function isOpenAIModel(model: string) {
@@ -431,6 +424,7 @@ export class LLMWorker {
   private activeModel: string = DEFAULT_MODEL
   private sessionTestType: string | null = null
   private sessionExtraContext: string = ''
+  private sessionProjectContext: string = ''
   private sessionUserId: string | null = null
   private sessionUserEmail: string | null = null
   private sessionId: string | null = null
@@ -438,6 +432,8 @@ export class LLMWorker {
   private currentStream: any = null
   private abortController: AbortController | null = null
   private lastContext: { systemPrompt: string; userMessage: string; questionText: string; questionType: string } | null = null
+  // Question-independent session prompt from ContextBuilder — used before the first question lands
+  private sessionBaselinePrompt: string | null = null
 
   // Session memory — accumulated across all screen analyses and manual prompts
   private conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = []
@@ -445,8 +441,9 @@ export class LLMWorker {
 
   // Stored handler references for proper cleanup
   private contextHandler: ((systemPrompt: string, userMessage: string, questionText: string, questionType: string) => void) | null = null
+  private baselineHandler: ((systemPrompt: string) => void) | null = null
   private regenerateHandler: (() => void) | null = null
-  private sessionStartedHandler: ((config: { testType?: string; aiModel?: string; userId?: string; userEmail?: string; extraContext?: string }) => void) | null = null
+  private sessionStartedHandler: ((config: { testType?: string; aiModel?: string; userId?: string; userEmail?: string; extraContext?: string; projectContext?: string }) => void) | null = null
   private sessionIdHandler: ((id: string) => void) | null = null
   private sessionStoppedHandler: (() => void) | null = null
   private screenAnalyseHandler: ((base64Image: string) => void) | null = null
@@ -479,6 +476,10 @@ export class LLMWorker {
       this.generate(systemPrompt, userMessage, questionText, questionType)
     }
 
+    this.baselineHandler = (systemPrompt: string) => {
+      this.sessionBaselinePrompt = systemPrompt
+    }
+
     this.regenerateHandler = () => {
       if (!this.lastContext || this.isGenerating) {
         console.log('[LLMWorker] Regenerate: no context stored or already generating')
@@ -492,6 +493,7 @@ export class LLMWorker {
     this.sessionStartedHandler = (config) => {
       this.sessionTestType = config?.testType ?? null
       this.sessionExtraContext = config?.extraContext?.trim() ?? ''
+      this.sessionProjectContext = config?.projectContext?.trim() ?? ''
       this.sessionUserId = config?.userId ?? null
       this.sessionUserEmail = config?.userEmail ?? null
       this.sessionId = null
@@ -505,9 +507,11 @@ export class LLMWorker {
     this.sessionStoppedHandler = () => {
       this.sessionTestType = null
       this.sessionExtraContext = ''
+      this.sessionProjectContext = ''
       this.sessionUserId = null
       this.sessionUserEmail = null
       this.sessionId = null
+      this.sessionBaselinePrompt = null
       this.conversationHistory = []
     }
     this.screenAnalyseHandler = (base64Image) => { this.analyseScreen(base64Image) }
@@ -523,6 +527,7 @@ export class LLMWorker {
     this.ipcBus.on('session:id', this.sessionIdHandler)
     this.ipcBus.on('session:stopped', this.sessionStoppedHandler)
     this.ipcBus.on('context:ready', this.contextHandler)
+    this.ipcBus.on('context:baseline', this.baselineHandler)
     this.ipcBus.on('overlay:regenerate', this.regenerateHandler)
     this.ipcBus.on('screen:analyse', this.screenAnalyseHandler)
     this.ipcBus.on('screen:analyse-multi', this.screenAnalyseMultiHandler)
@@ -563,8 +568,11 @@ export class LLMWorker {
     // Store context for potential regenerate
     this.lastContext = { systemPrompt, userMessage, questionText, questionType }
 
+    // Resolved per call — extra context can change mid-session via session:extra-context
+    const contextScope = contextScopeHash(this.sessionProjectContext, this.sessionExtraContext)
+
     // Check cache first (skipped on regenerate)
-    const cached = skipCache ? null : await this.cache.get(questionText, questionType)
+    const cached = skipCache ? null : await this.cache.get(questionText, questionType, contextScope)
     if (cached) {
       console.log('[LLMWorker] Cache hit!')
       // Simulate token streaming for consistent UI experience
@@ -619,7 +627,7 @@ export class LLMWorker {
 
       // Store in cache and broadcast completed answer for conversation history
       if (fullResponse) {
-        await this.cache.set(questionText, questionType, fullResponse)
+        await this.cache.set(questionText, questionType, fullResponse, contextScope)
         this.ipcBus.emit('answer:complete', questionText, questionType, fullResponse)
       }
     } catch (err: any) {
@@ -661,7 +669,7 @@ export class LLMWorker {
       const userText = 'Solve every question visible on this screen. No preamble, no recap, no advice on delivery — just the answers.'
 
       console.log(`[LLMWorker] Analysing screen (model: ${this.activeModel}, fresh context)`)
-      const systemPrompt = buildScreenSystemPrompt(this.sessionTestType, this.sessionExtraContext)
+      const systemPrompt = buildScreenSystemPrompt(this.sessionTestType, this.sessionProjectContext, this.sessionExtraContext)
 
       if (isOpenAIModel(this.activeModel)) {
         this.abortController = new AbortController()
@@ -741,7 +749,7 @@ export class LLMWorker {
       const userText = `Solve every question visible across these ${images.length} screenshot${images.length === 1 ? '' : 's'}. No preamble, no recap, no advice on delivery — just the answers.`
 
       console.log(`[LLMWorker] Analysing ${images.length} screenshots (model: ${this.activeModel}, fresh context)`)
-      const systemPrompt = buildScreenSystemPrompt(this.sessionTestType, this.sessionExtraContext)
+      const systemPrompt = buildScreenSystemPrompt(this.sessionTestType, this.sessionProjectContext, this.sessionExtraContext)
 
       if (isOpenAIModel(this.activeModel)) {
         this.abortController = new AbortController()
@@ -817,8 +825,13 @@ export class LLMWorker {
 
     // Pick the best available system prompt for the current session context
     const systemPrompt = this.lastContext?.systemPrompt
-      ?? (this.sessionTestType ? buildScreenSystemPrompt(this.sessionTestType, this.sessionExtraContext) : null)
-      ?? 'You are an expert AI assistant. Answer the user\'s question clearly, concisely, and accurately.'
+      ?? (this.sessionTestType ? buildScreenSystemPrompt(this.sessionTestType, this.sessionProjectContext, this.sessionExtraContext) : null)
+      ?? this.sessionBaselinePrompt
+      ?? appendProjectContext(
+        'You are an expert AI assistant. Answer the user\'s question clearly, concisely, and accurately.',
+        this.sessionProjectContext,
+        this.sessionExtraContext,
+      )
 
     const shortTitle = prompt.length > 60 ? prompt.slice(0, 57) + '…' : prompt
     const cardType = this.sessionTestType ?? 'manual'
@@ -912,6 +925,10 @@ export class LLMWorker {
     if (this.contextHandler) {
       this.ipcBus.removeListener('context:ready', this.contextHandler)
       this.contextHandler = null
+    }
+    if (this.baselineHandler) {
+      this.ipcBus.removeListener('context:baseline', this.baselineHandler)
+      this.baselineHandler = null
     }
     if (this.regenerateHandler) {
       this.ipcBus.removeListener('overlay:regenerate', this.regenerateHandler)

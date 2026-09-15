@@ -10,6 +10,7 @@ export type SidebarItemId =
   | 'online-assessment'
   | 'solved-assessment'
   | 'cv-manager'
+  | 'projects'
   | 'auto-typer'
   | 'settings'
 
@@ -67,6 +68,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Tools',
     items: [
       { id: 'cv-manager', label: 'CV Manager', icon: '📄' },
+      { id: 'projects', label: 'Projects', icon: '📁' },
       { id: 'auto-typer', label: 'Auto-Typer', icon: '⌨', premiumPlus: true },
     ],
   },

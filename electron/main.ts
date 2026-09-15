@@ -1,7 +1,8 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, clipboard, desktopCapturer, screen, shell, nativeImage } from 'electron'
+import { app, BrowserWindow, globalShortcut, ipcMain, clipboard, desktopCapturer, screen, shell, dialog } from 'electron'
 import fs from 'node:fs'
 import { autoUpdater } from 'electron-updater'
 import { createOverlayWindow } from './overlay-window.js'
+import { loadAppIcon } from './app-icon.js'
 import { IpcBus } from './ipc-bus.js'
 import { logger } from './lib/logger.js'
 import { autoTyper, AutoTypeStatus, AutoTypeCountdown } from './lib/auto-typer.js'
@@ -295,6 +296,8 @@ const LIMITS = {
   company:     300,
   targetRole:  300,
   extraCtx:    50_000,
+  projectCtx:  120_000,
+  projectName: 200,
   cvName:      200,
   sessionId:   128,
   url:         2048,
@@ -338,14 +341,8 @@ function applyAppBranding() {
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.retias.app')
   }
-  const iconPaths = [
-    join(__dirname, '../../public/logo.png'),
-    join(__dirname, '../renderer/logo.png'),
-  ]
-  const iconPath = iconPaths.find((p) => fs.existsSync(p))
-  if (!iconPath) return
-  const icon = nativeImage.createFromPath(iconPath)
-  if (icon.isEmpty()) return
+  const icon = loadAppIcon()
+  if (!icon) return
   if (process.platform === 'darwin' && app.dock) {
     app.dock.setIcon(icon)
   }
@@ -565,26 +562,37 @@ async function bootstrap() {
   })
 
   ipcMain.on('session:start', (_event, config) => {
-    // Sanitise all free-text fields before they reach the LLM worker
-    const safeConfig = {
-      ...config,
-      resumeText:      clamp(config.resumeText      ?? '', LIMITS.resumeText, 'resumeText'),
-      jobDescription:  clamp(config.jobDescription   ?? '', LIMITS.jobDesc,   'jobDescription'),
-      company:         clamp(config.company           ?? '', LIMITS.company,   'company'),
-      targetRole:      clamp(config.targetRole        ?? '', LIMITS.targetRole,'targetRole'),
-      extraContext:    clamp(config.extraContext       ?? '', LIMITS.extraCtx,  'extraContext'),
-      meetingRole:     clamp(config.meetingRole        ?? '', LIMITS.targetRole,'meetingRole'),
-      meetingContext:  clamp(config.meetingContext     ?? '', LIMITS.extraCtx,  'meetingContext'),
-      userId: currentUserId ?? undefined,
-      userEmail: currentUserEmail ?? undefined,
-    }
-    // Refresh screen source cache at session start in case displays changed since startup
-    const primaryId = String(screen.getPrimaryDisplay().id)
-    desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
-      const primary = sources.find((s) => s.display_id === primaryId) ?? sources[0]
-      if (primary) cachedScreenSource = primary
-    }).catch(() => { /* keep existing cache */ })
-    ipcBus.startSession(safeConfig).catch(console.error)
+    void (async () => {
+      let projectContext = ''
+      if (config.projectId && currentUserId) {
+        try {
+          const { buildProjectContextForSession } = await import('./lib/project-store.js')
+          projectContext = await buildProjectContextForSession(currentUserId, config.projectId)
+        } catch (err) {
+          console.error('[session:start] Failed to load project context:', err)
+        }
+      }
+
+      const safeConfig = {
+        ...config,
+        resumeText:      clamp(config.resumeText      ?? '', LIMITS.resumeText, 'resumeText'),
+        jobDescription:  clamp(config.jobDescription   ?? '', LIMITS.jobDesc,   'jobDescription'),
+        company:         clamp(config.company           ?? '', LIMITS.company,   'company'),
+        targetRole:      clamp(config.targetRole        ?? '', LIMITS.targetRole,'targetRole'),
+        extraContext:    clamp(config.extraContext       ?? '', LIMITS.extraCtx,  'extraContext'),
+        projectContext:  clamp(projectContext || (config.projectContext ?? ''), LIMITS.projectCtx, 'projectContext'),
+        meetingRole:     clamp(config.meetingRole        ?? '', LIMITS.targetRole,'meetingRole'),
+        meetingContext:  clamp(config.meetingContext     ?? '', LIMITS.extraCtx,  'meetingContext'),
+        userId: currentUserId ?? undefined,
+        userEmail: currentUserEmail ?? undefined,
+      }
+      const primaryId = String(screen.getPrimaryDisplay().id)
+      desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
+        const primary = sources.find((s) => s.display_id === primaryId) ?? sources[0]
+        if (primary) cachedScreenSource = primary
+      }).catch(() => { /* keep existing cache */ })
+      ipcBus.startSession(safeConfig).catch(console.error)
+    })()
   })
 
   ipcMain.on('session:stop', () => {
@@ -891,6 +899,117 @@ async function bootstrap() {
     if (!currentUserId) return
     const { deleteCV } = await import('./lib/cv-store.js')
     return deleteCV(currentUserId, cvId)
+  })
+
+  // ── Project handlers ───────────────────────────────────────────────────────
+
+  const PROJECTS_SETUP_MSG =
+    'Projects database is not set up yet. Open Supabase → SQL Editor, run supabase/projects.sql, then try again.'
+
+  function rethrowProjectDbError(err: unknown): never {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('public.projects') || msg.includes('schema cache')) {
+      throw new Error(PROJECTS_SETUP_MSG)
+    }
+    throw err instanceof Error ? err : new Error(msg)
+  }
+
+  ipcMain.handle('project:list', async () => {
+    if (!currentUserId) return []
+    try {
+      const { listProjects } = await import('./lib/project-store.js')
+      return listProjects(currentUserId)
+    } catch (err) {
+      rethrowProjectDbError(err)
+    }
+  })
+
+  ipcMain.handle('project:get', async (_e, projectId: string) => {
+    if (!currentUserId) return null
+    try {
+      const { getProject } = await import('./lib/project-store.js')
+      return getProject(currentUserId, projectId)
+    } catch (err) {
+      rethrowProjectDbError(err)
+    }
+  })
+
+  ipcMain.handle('project:save', async (_e, payload: { id?: string; name: string; instructions: string; folderPath?: string | null }) => {
+    if (!currentUserId) throw new Error('Not authenticated')
+    try {
+      const { saveProject } = await import('./lib/project-store.js')
+      const safeName = clamp(requireString(payload.name, 'Project name'), LIMITS.projectName, 'projectName')
+      const safeInstructions = clamp(payload.instructions ?? '', LIMITS.extraCtx, 'projectInstructions')
+      const folderPath = payload.folderPath?.trim() || null
+      return saveProject(currentUserId, { id: payload.id, name: safeName, instructions: safeInstructions, folderPath })
+    } catch (err) {
+      rethrowProjectDbError(err)
+    }
+  })
+
+  ipcMain.handle('project:delete', async (_e, projectId: string) => {
+    if (!currentUserId) return
+    try {
+      const { deleteProject } = await import('./lib/project-store.js')
+      return deleteProject(currentUserId, projectId)
+    } catch (err) {
+      rethrowProjectDbError(err)
+    }
+  })
+
+  ipcMain.handle('project:add-file', async (_e, projectId: string, name: string, content: string) => {
+    if (!currentUserId) throw new Error('Not authenticated')
+    try {
+      const { addProjectFile } = await import('./lib/project-store.js')
+      const safeName = clamp(requireString(name, 'File name'), LIMITS.projectName, 'projectFileName')
+      const safeContent = clamp(content, LIMITS.resumeText, 'projectFileContent')
+      return addProjectFile(currentUserId, projectId, safeName, safeContent)
+    } catch (err) {
+      rethrowProjectDbError(err)
+    }
+  })
+
+  ipcMain.handle('project:delete-file', async (_e, fileId: string) => {
+    if (!currentUserId) return
+    try {
+      const { deleteProjectFile } = await import('./lib/project-store.js')
+      return deleteProjectFile(currentUserId, fileId)
+    } catch (err) {
+      rethrowProjectDbError(err)
+    }
+  })
+
+  ipcMain.handle('project:read-folder', async (_event, folderPath: unknown) => {
+    const path = String(folderPath ?? '').trim()
+    if (!path) return { folderPath: null, files: [] as Array<{ name: string; content: string }> }
+    const { readProjectFolder } = await import('./lib/project-folder-import.js')
+    const { extractDocumentBuffer } = await import('./lib/extract-document.js')
+    const files = await readProjectFolder(path, extractDocumentBuffer)
+    return { folderPath: path, files }
+  })
+
+  ipcMain.handle('project:pick-folder', async (event) => {
+    const parent =
+      BrowserWindow.fromWebContents(event.sender) ??
+      BrowserWindow.getFocusedWindow() ??
+      BrowserWindow.getAllWindows()[0]
+
+    const result = await dialog.showOpenDialog(parent, {
+      title: 'Choose a folder for project context',
+      properties: ['openDirectory'],
+      buttonLabel: 'Use this folder',
+    })
+
+    if (result.canceled || !result.filePaths[0]) {
+      return { folderPath: null, files: [] }
+    }
+
+    const folderPath = result.filePaths[0]
+    const { readProjectFolder } = await import('./lib/project-folder-import.js')
+    const { extractDocumentBuffer } = await import('./lib/extract-document.js')
+    const files = await readProjectFolder(folderPath, extractDocumentBuffer)
+    console.log(`[project:pick-folder] ${folderPath} → ${files.length} file(s)`)
+    return { folderPath, files }
   })
 
   // Context prefetch — called when user clicks "Start Session →" so profile is cached before interview starts

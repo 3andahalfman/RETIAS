@@ -1,8 +1,6 @@
 // Global type declarations for the Electron contextBridge API
 // exposed via preload.ts
 
-declare const __APP_VERSION__: string
-
 interface SessionConfig {
   micDeviceId?: string
   loopbackDeviceId?: string
@@ -13,6 +11,8 @@ interface SessionConfig {
   interviewType?: 'SWE' | 'PM' | 'DS'
   language?: string
   extraContext?: string
+  projectId?: string
+  projectContext?: string
   userId?: string
   testType?: string
   aiModel?: string
@@ -87,6 +87,33 @@ interface CV {
   created_at: number
 }
 
+interface Project {
+  id: string
+  user_id: string
+  name: string
+  instructions: string
+  folder_path: string | null
+  created_at: number
+  updated_at: number
+}
+
+interface ProjectSummary extends Project {
+  file_count: number
+}
+
+interface ProjectFile {
+  id: string
+  project_id: string
+  user_id: string
+  name: string
+  content: string
+  created_at: number
+}
+
+interface ProjectWithFiles extends Project {
+  files: ProjectFile[]
+}
+
 interface ElectronAPI {
   startSession: (config: SessionConfig) => void
   stopSession: () => void
@@ -125,12 +152,14 @@ interface ElectronAPI {
   setWindowOpacity?: (opacity: number) => void
   setAlwaysOnTop?: (value: boolean) => void
   setStealthMode?: (enabled: boolean) => void
+  getAppVersion: () => Promise<string>
 
   // Past sessions
   getPastSessions: () => Promise<PastSession[]>
   getSessionDetail: (sessionId: string) => Promise<SessionDetail | null>
   deleteSession: (sessionId: string) => Promise<void>
   getDashboardMetrics: () => Promise<DashboardMetrics>
+  clearAllSessions: () => Promise<void>
 
   // Job scraping
   scrapeJobUrl: (url: string) => Promise<ScrapeResult>
@@ -142,7 +171,7 @@ interface ElectronAPI {
   generateMockJD: (resumeText: string) => Promise<string>
 
   // Extract plain text from PDF/DOCX buffer
-  extractResumeText?: (buffer: ArrayBuffer, filename: string) => Promise<string>
+  extractResumeText: (buffer: ArrayBuffer, filename: string) => Promise<string>
 
   // Open URL in default browser
   openExternal?: (url: string) => void
@@ -172,6 +201,15 @@ interface ElectronAPI {
   saveCv: (name: string, content: string) => Promise<CV>
   listCvs: () => Promise<CV[]>
   deleteCv: (cvId: string) => Promise<void>
+
+  listProjects: () => Promise<ProjectSummary[]>
+  getProject: (projectId: string) => Promise<ProjectWithFiles | null>
+  saveProject: (payload: { id?: string; name: string; instructions: string; folderPath?: string | null }) => Promise<Project>
+  deleteProject: (projectId: string) => Promise<void>
+  addProjectFile: (projectId: string, name: string, content: string) => Promise<ProjectFile>
+  deleteProjectFile: (fileId: string) => Promise<void>
+  pickProjectFolder: () => Promise<{ folderPath: string | null; files: Array<{ name: string; content: string }> }>
+  readProjectFolder: (folderPath: string) => Promise<{ folderPath: string | null; files: Array<{ name: string; content: string }> }>
 
   // Solved Assessment bank (Premium Plus browse)
   listSolvedQuestions?: () => Promise<Array<{
@@ -232,25 +270,6 @@ interface AutoTypeStatus {
   error?: string
 }
 
-declare global {
-  interface Window {
-    electronAPI?: ElectronAPI
-  }
-  interface User {
-    id: string
-    email: string
-    display_name: string
-    google_id: string | null
-    created_at: number
-    is_premium: boolean
-  }
-  interface CV {
-    id: string
-    user_id: string
-    name: string
-    content: string
-    created_at: number
-  }
+interface Window {
+  electronAPI?: ElectronAPI
 }
-
-export {}

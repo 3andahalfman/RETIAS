@@ -2,6 +2,7 @@ import { IpcBus, SessionConfig } from '../ipc-bus.js'
 import { extractContext, makeSessionHash, ExtractedContext } from '../lib/context-extractor.js'
 import { storeProfile, loadProfile } from '../lib/profile-store.js'
 import { buildSystemPrompt, buildUserMessage, getMeetingAssistPrompt, buildMeetingUserMessage } from '../lib/prompt-builder.js'
+import { appendProjectContext } from '../lib/project-context.js'
 
 /**
  * Context Builder — Phase 5 (Persistent Profile Context)
@@ -43,6 +44,8 @@ export class ContextBuilder {
       this.extractedContext = null
       this.extractionPromise = this.runExtraction(config)
       this.answerHistory = []
+      this.publishBaseline()
+      void this.extractionPromise.catch(() => {}).then(() => this.publishBaseline())
     }
 
     this.questionHandler = (question: string, type: QuestionType, context: string) => {
@@ -119,14 +122,10 @@ export class ContextBuilder {
     }
 
     const config = this.sessionConfig
-    let systemPrompt: string
+    const systemPrompt = this.buildSessionSystemPrompt(type)
     let userMessage: string
 
     if (config?.sessionMode === 'meeting') {
-      const role = config.meetingRole || config.targetRole || 'team member'
-      const meetingType = config.meetingType || 'general'
-      const context = config.meetingContext || config.extraContext || ''
-      systemPrompt = getMeetingAssistPrompt(role, meetingType, context, config.language, config.extraContext)
       userMessage = buildMeetingUserMessage(question, contextWindow, this.answerHistory)
       this.ipcBus.emit('context:ready', systemPrompt, userMessage, question, type)
       console.log('[ContextBuilder] Meeting context assembled for:', question.substring(0, 60))
@@ -135,12 +134,9 @@ export class ContextBuilder {
 
     if (this.extractedContext) {
       // ── Structured path (normal) ──────────────────────────────────────────
-      const { profile, job, company, style } = this.extractedContext
-      systemPrompt = buildSystemPrompt(type, profile, job, company, style, config?.language, config?.extraContext)
-      userMessage = buildUserMessage(question, contextWindow, type, profile.candidate_name, this.answerHistory)
+      userMessage = buildUserMessage(question, contextWindow, type, this.extractedContext.profile.candidate_name, this.answerHistory)
     } else {
       // ── Legacy fallback (extraction failed or no resume/JD provided) ──────
-      systemPrompt = this.buildLegacySystemPrompt(type, config)
       userMessage = this.buildLegacyUserMessage(question, contextWindow, config)
     }
 
@@ -148,9 +144,39 @@ export class ContextBuilder {
     console.log('[ContextBuilder] Context assembled for:', question.substring(0, 60))
   }
 
+  /** System prompt for the current session config — independent of any specific question. */
+  private buildSessionSystemPrompt(type: QuestionType, includeRawProfile = false): string {
+    const config = this.sessionConfig
+
+    if (config?.sessionMode === 'meeting') {
+      const role = config.meetingRole || config.targetRole || 'team member'
+      const meetingType = config.meetingType || 'general'
+      const context = config.meetingContext || config.extraContext || ''
+      return getMeetingAssistPrompt(role, meetingType, context, config.language, config.extraContext, config.projectContext)
+    }
+
+    if (this.extractedContext) {
+      const { profile, job, company, style } = this.extractedContext
+      return buildSystemPrompt(type, profile, job, company, style, config?.language, config?.extraContext, config?.projectContext)
+    }
+
+    return this.buildLegacySystemPrompt(type, config, includeRawProfile)
+  }
+
+  /**
+   * Publishes a question-independent system prompt so consumers (manual chat) have full
+   * session context before the first question is detected. Screen-analysis sessions are
+   * skipped — LLMWorker owns their prompt.
+   */
+  private publishBaseline() {
+    const config = this.sessionConfig
+    if (!config || config.testType) return
+    this.ipcBus.emit('context:baseline', this.buildSessionSystemPrompt('general', true))
+  }
+
   // ── Legacy prompt builders (fallback only) ──────────────────────────────────
 
-  private buildLegacySystemPrompt(type: QuestionType, config: SessionConfig | null): string {
+  private buildLegacySystemPrompt(type: QuestionType, config: SessionConfig | null, includeRawProfile = false): string {
     const role = config?.targetRole || 'software engineer'
     const company = config?.company || 'the company'
 
@@ -169,16 +195,19 @@ Use the candidate's resume context when relevant. Be specific — no filler phra
 
     prompt += typeInstructions[type] || typeInstructions.general
 
+    if (includeRawProfile) {
+      if (config?.resumeText) {
+        prompt += `\n\nCANDIDATE RESUME:\n${config.resumeText.substring(0, 4000)}`
+      }
+      if (config?.jobDescription) {
+        prompt += `\n\nJOB DESCRIPTION:\n${config.jobDescription.substring(0, 2000)}`
+      }
+    }
+
     if (config?.language) {
       prompt += `\n\nCRITICAL: Respond entirely in ${config.language}.`
     }
-    if (config?.extraContext) {
-      // Truncate to prevent prompt injection via oversized or adversarial input
-      const sanitized = config.extraContext.substring(0, 2000)
-      prompt += `\n\nEXTRA INSTRUCTIONS:\n${sanitized}`
-    }
-
-    return prompt
+    return appendProjectContext(prompt, config?.projectContext, config?.extraContext)
   }
 
   private buildLegacyUserMessage(

@@ -21,6 +21,7 @@ import { SessionRecorder } from './workers/session-recorder.js'
  *   transcript:sentence  Aggregator → Question Detector
  *   question:detected    Detector → Context Builder
  *   context:ready        Builder → LLM Worker
+ *   context:baseline     Builder → LLM Worker (question-independent session prompt)
  *   llm:token            LLM Worker → Renderer (IPC)
  *   llm:done             LLM Worker → Renderer (IPC)
  *   overlay:regenerate   Hotkey → LLM Worker
@@ -172,6 +173,8 @@ export interface SessionConfig {
   language?: string
   aiModel?: string
   extraContext?: string
+  projectId?: string
+  projectContext?: string
   autoGenerate?: boolean
   jobUrl?: string
   userId?: string

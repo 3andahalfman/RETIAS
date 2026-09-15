@@ -1,23 +1,8 @@
-import { BrowserWindow, nativeImage, screen } from 'electron'
-import fs from 'node:fs'
+import { BrowserWindow, screen } from 'electron'
 import path from 'path'
+import { loadAppIcon } from './app-icon.js'
 
 const isDev = process.env.NODE_ENV === 'development'
-
-function resolveAppIconPath(): string | null {
-  const candidates = [
-    path.join(__dirname, '../../public/logo.png'),
-    path.join(__dirname, '../renderer/logo.png'),
-  ]
-  return candidates.find((p) => fs.existsSync(p)) ?? null
-}
-
-function loadAppIcon() {
-  const iconPath = resolveAppIconPath()
-  if (!iconPath) return undefined
-  const icon = nativeImage.createFromPath(iconPath)
-  return icon.isEmpty() ? undefined : icon
-}
 
 export function createOverlayWindow(): BrowserWindow {
   const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize

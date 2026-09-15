@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { loadSettings } from './Settings'
 import WindowControls from './WindowControls'
+import ProjectSelector from './ProjectSelector'
 
 const ROLE_PRESETS = [
   'Senior Software Engineer in Test',
@@ -28,6 +29,9 @@ interface SetupProps {
   onDock: () => void
   onBack?: () => void
   cvs?: CV[]
+  projects?: ProjectSummary[]
+  initialProjectId?: string
+  onManageProjects?: () => void
   user?: User
 }
 
@@ -45,6 +49,8 @@ export interface SessionConfig {
   interviewType?: 'SWE' | 'PM' | 'DS'
   /** Online Assessment session category (english, coding, …). */
   testType?: string
+  /** Saved project (instructions + files) attached to this session. */
+  projectId?: string
   sessionMode?: 'interview' | 'meeting' | 'online-test'
   meetingType?: 'standup' | 'general'
   meetingRole?: string
@@ -64,7 +70,7 @@ function ValidationModal({ message, onClose }: { message: string; onClose: () =>
   )
 }
 
-export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [], user }: SetupProps) {
+export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [], projects = [], initialProjectId = '', onManageProjects, user }: SetupProps) {
   const isPremium = user?.is_premium ?? false
   const [step, setStep] = useState<1 | 2>(1)
   const [validationMsg, setValidationMsg] = useState('')
@@ -84,6 +90,7 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [],
   const [extraContext, setExtraContext] = useState(DEFAULT_EXTRA_CONTEXT)
   const [aiModel, setAiModel] = useState(() => loadSettings().aiModel || 'claude-sonnet-4-6')
   const [autoGenerate, setAutoGenerate] = useState(true)
+  const [projectId, setProjectId] = useState(initialProjectId)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -105,6 +112,7 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [],
       aiModel,
       targetRole: targetRole || jobDescription || 'Software Engineer',
       interviewType: 'SWE',
+      projectId: projectId || undefined,
     })
   }
 
@@ -151,7 +159,6 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [],
       if (result?.success) {
         if (result.jobDescription) setJobDescription(result.jobDescription)
         if (result.company && !company) setCompany(result.company)
-        if (result.targetRole && !targetRole) setTargetRole(result.targetRole)
       } else {
         setValidationMsg(`Could not scrape URL: ${result?.error ?? 'Unknown error'}`)
       }
@@ -365,6 +372,8 @@ export default function SetupWizard({ onCreateSession, onDock, onBack, cvs = [],
                   </select>
                 </div>
               </div>
+
+              <ProjectSelector projects={projects} value={projectId} onChange={setProjectId} onManageProjects={onManageProjects} />
 
               {/* Extra Context */}
               <div className="setup-field">

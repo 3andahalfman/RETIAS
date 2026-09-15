@@ -18,6 +18,7 @@ import AnswerPanel from './components/AnswerPanel'
 import AudioCapture from './components/AudioCapture'
 import ManualPromptBar from './components/ManualPromptBar'
 import CvManager from './components/CvManager'
+import ProjectManager, { type ProjectSessionTarget } from './components/ProjectManager'
 import Settings, { loadSettings } from './components/Settings'
 import { isAdminEmail } from './lib/admin'
 import { hasPremiumPlusAccess } from './lib/premium-access'
@@ -29,13 +30,15 @@ import PricingPage from './components/PricingPage'
 import AutoTyper from './components/AutoTyper'
 import './index.css'
 
-type View = 'dashboard' | 'setup' | 'mock-interview' | 'meeting-setup' | 'past-sessions' | 'session' | 'online-test' | 'solve-test' | 'cv-manager' | 'auto-typer' | 'settings' | 'pricing'
+type View = 'dashboard' | 'setup' | 'mock-interview' | 'meeting-setup' | 'past-sessions' | 'session' | 'online-test' | 'solve-test' | 'cv-manager' | 'projects' | 'auto-typer' | 'settings' | 'pricing'
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
   const [updateGatePassed, setUpdateGatePassed] = useState(false)
   const [authLoading, setAuthLoading] = useState(true)
   const [cvs, setCvs] = useState<CV[]>([])
+  const [projects, setProjects] = useState<ProjectSummary[]>([])
+  const [pendingProjectId, setPendingProjectId] = useState('')
 
   const [view, setView] = useState<View>('dashboard')
   const [showTutorial, setShowTutorial] = useState<boolean>(
@@ -95,14 +98,19 @@ export default function App() {
     }
   }, [updateGatePassed])
 
-  // Load CVs whenever user changes
+  // Load CVs and projects whenever user changes
   useEffect(() => {
-    if (!user) { setCvs([]); return }
+    if (!user) { setCvs([]); setProjects([]); return }
     window.electronAPI?.listCvs().then((list) => setCvs(list ?? [])).catch(() => {})
+    window.electronAPI?.listProjects().then((list) => setProjects(list ?? [])).catch(() => {})
   }, [user])
 
   const refreshCvs = () => {
     window.electronAPI?.listCvs().then((list) => setCvs(list ?? [])).catch(() => {})
+  }
+
+  const refreshProjects = () => {
+    window.electronAPI?.listProjects().then((list) => setProjects(list ?? [])).catch(() => {})
   }
 
   // Re-check premium status when the app regains focus — e.g. after the user
@@ -166,6 +174,8 @@ export default function App() {
     window.electronAPI?.authLogout()
     setUser(null)
     setCvs([])
+    setProjects([])
+    setPendingProjectId('')
     setView('dashboard')
   }
 
@@ -191,6 +201,7 @@ export default function App() {
       meetingType: config.meetingType,
       meetingRole: config.meetingRole,
       meetingContext: config.meetingContext,
+      projectId: config.projectId,
     })
     setSessionActive(true)
     setIsStarted(false)
@@ -199,7 +210,7 @@ export default function App() {
     setIsOnlineTest(false)
   }
 
-  const handleCreateOnlineTest = (testType: string, extraContext?: string) => {
+  const handleCreateOnlineTest = (testType: string, extraContext?: string, projectId?: string) => {
     const appSettings = loadSettings()
     let aiModel = appSettings.aiModel
     if (aiModel === 'claude-opus-4-5' && !user?.is_premium) {
@@ -219,7 +230,7 @@ export default function App() {
       autoGenerate: false,
     })
     setView('session')
-    window.electronAPI?.startSession({ testType, aiModel, extraContext: instructions })
+    window.electronAPI?.startSession({ testType, aiModel, extraContext: instructions, projectId })
     setSessionActive(true)
     setIsStarted(true)
     setMicActive(false)
@@ -310,6 +321,7 @@ export default function App() {
   }
 
   const handleSidebarNavigate = (item: SidebarItemId) => {
+    setPendingProjectId('')
     if (item === 'real-interview') setView('setup')
     else if (item === 'meeting-assist') setView('meeting-setup')
     else if (item === 'mock-interview') setView('mock-interview')
@@ -318,9 +330,17 @@ export default function App() {
     else if (item === 'sessions') setView('past-sessions')
     else if (item === 'dashboard') setView('dashboard')
     else if (item === 'cv-manager') setView('cv-manager')
+    else if (item === 'projects') setView('projects')
     else if (item === 'auto-typer') setView('auto-typer')
     else if (item === 'settings') setView('settings')
   }
+
+  const handleStartProjectSession = (projectId: string, target: ProjectSessionTarget) => {
+    setPendingProjectId(projectId)
+    setView(target)
+  }
+
+  const handleManageProjects = () => setView('projects')
 
   if (view === 'dashboard') {
     return (
@@ -354,6 +374,9 @@ export default function App() {
               onBack={() => setView('dashboard')}
               onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
               cvs={cvs}
+              projects={projects}
+              initialProjectId={pendingProjectId}
+              onManageProjects={handleManageProjects}
             />
           </div>
         </div>
@@ -372,6 +395,9 @@ export default function App() {
               onBack={() => setView('dashboard')}
               onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
               cvs={cvs}
+              projects={projects}
+              initialProjectId={pendingProjectId}
+              onManageProjects={handleManageProjects}
               user={user}
             />
           </div>
@@ -390,6 +416,9 @@ export default function App() {
               onCreateSession={handleCreateSession}
               onBack={() => setView('dashboard')}
               onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
+              projects={projects}
+              initialProjectId={pendingProjectId}
+              onManageProjects={handleManageProjects}
             />
           </div>
         </div>
@@ -407,6 +436,9 @@ export default function App() {
               onStart={handleCreateOnlineTest}
               onBack={() => setView('dashboard')}
               onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
+              projects={projects}
+              initialProjectId={pendingProjectId}
+              onManageProjects={handleManageProjects}
             />
           </div>
         </div>
@@ -440,6 +472,24 @@ export default function App() {
             <CvManager
               cvs={cvs}
               onCvsChange={refreshCvs}
+              onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (view === 'projects') {
+    return (
+      <div className="app-root">
+        <div className="page-layout">
+          <Sidebar activeItem="projects" user={user} onNavigate={handleSidebarNavigate} onLogout={handleLogout} onUpgrade={() => setView('pricing')} />
+          <div className="page-main">
+            <ProjectManager
+              projects={projects}
+              onProjectsChange={refreshProjects}
+              onStartSession={handleStartProjectSession}
               onDock={() => { setIsDocked(true); window.electronAPI?.dockWindow() }}
             />
           </div>

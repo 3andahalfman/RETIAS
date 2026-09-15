@@ -1,4 +1,5 @@
 import type { CandidateProfile, JobContext, CompanyContext, StyleContext } from './context-extractor.js'
+import { appendProjectContext } from './project-context.js'
 
 /**
  * Prompt Builder — assembles layered system + user prompts from structured context.
@@ -57,7 +58,8 @@ export function buildSystemPrompt(
   company: CompanyContext,
   style: StyleContext,
   language?: string,
-  extraContext?: string
+  extraContext?: string,
+  projectContext?: string
 ): string {
   const sections: string[] = []
 
@@ -140,13 +142,7 @@ Only respond to explicit or clearly implicit questions. Treat interviewer statem
   if (language) {
     prompt += `\n\nCRITICAL: Respond entirely in ${language}.`
   }
-  if (extraContext) {
-    // Truncate to prevent prompt injection via oversized or adversarial input
-    const sanitized = extraContext.substring(0, 2000)
-    prompt += `\n\nEXTRA INSTRUCTIONS:\n${sanitized}`
-  }
-
-  return prompt
+  return appendProjectContext(prompt, projectContext, extraContext)
 }
 
 /**
@@ -192,7 +188,8 @@ export function getMeetingAssistPrompt(
   meetingType: MeetingType,
   context?: string,
   language?: string,
-  extraContext?: string
+  extraContext?: string,
+  projectContext?: string
 ): string {
   const meetingLabel = meetingType === 'standup' ? 'daily standup' : 'general team meeting'
 
@@ -216,11 +213,8 @@ Rules:
   if (language) {
     prompt += `\n\nCRITICAL: Respond entirely in ${language}.`
   }
-  if (extraContext?.trim()) {
-    prompt += `\n\nEXTRA NOTES:\n${extraContext.trim().substring(0, 2000)}`
-  }
 
-  return prompt
+  return appendProjectContext(prompt, projectContext, extraContext)
 }
 
 /** User message for meeting assist — recent conversation + detected prompt. */

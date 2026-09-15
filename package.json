@@ -1,15 +1,17 @@
 {
   "name": "retias",
-  "version": "1.8.5",
+  "version": "1.9.0",
   "description": "Real Time Interview Assistant Software â€” AI-powered real-time coaching",
   "main": "dist/electron/main.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
     "dev:vite": "vite",
     "dev:electron": "tsc -p tsconfig.electron.json && npx wait-on http://localhost:5173 -t 30000 && node scripts/dev-electron.cjs",
-    "build": "node scripts/generate-env.cjs && vite build && tsc -p tsconfig.electron.json",
-    "package": "npm run build && electron-builder",
-    "package:win": "npm run build && electron-builder --win",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "generate-icon": "node scripts/generate-icon.cjs",
+    "build": "node scripts/generate-env.cjs && npm run typecheck && vite build && tsc -p tsconfig.electron.json",
+    "package": "npm run build && npm run generate-icon && electron-builder",
+    "package:win": "npm run build && npm run generate-icon && electron-builder --win",
     "publish:win": "npm run build && node scripts/publish-win.js",
     "package:mac": "npm run build && electron-builder --mac"
   },
@@ -55,8 +57,7 @@
           ]
         }
       ],
-      "icon": "public/logo.png",
-      "signAndEditExecutable": false,
+      "icon": "build/icon.ico",
       "publisherName": "RETIAS",
       "rfc3161TimeStampServer": "http://timestamp.digicert.com",
       "signingHashAlgorithms": [
@@ -71,7 +72,9 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "artifactName": "RETIAS-Setup.exe",
-      "uninstallDisplayName": "RETIAS"
+      "uninstallDisplayName": "RETIAS",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
     },
     "directories": {
       "output": "release"
@@ -104,6 +107,7 @@
     "cross-env": "^10.1.0",
     "electron": "^28.3.3",
     "electron-builder": "^24.13.3",
+    "png-to-ico": "^2.1.8",
     "postcss": "^8.5.8",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.9.3",

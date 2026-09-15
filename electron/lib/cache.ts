@@ -109,19 +109,33 @@ export function persist(database: Database) {
   fs.writeFileSync(dbPath, Buffer.from(data))
 }
 
-function hashQuestion(text: string): string {
+/**
+ * Cache keys fold in a hash of the active project/extra context: the same question
+ * answered under different project context has a different correct answer.
+ * An empty scope yields the bare question hash, so pre-existing DB rows and the
+ * seeded common questions stay reachable in sessions with no project attached.
+ */
+export function contextScopeHash(projectContext?: string | null, extraContext?: string | null): string {
+  const proj = (projectContext ?? '').trim()
+  const extra = (extraContext ?? '').trim()
+  if (!proj && !extra) return ''
+  return crypto.createHash('sha256').update(`${proj}\u0000${extra}`).digest('hex').substring(0, 16)
+}
+
+function hashQuestion(text: string, contextScope = ''): string {
   const normalized = text
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
-  return crypto.createHash('sha256').update(normalized).digest('hex')
+  const hash = crypto.createHash('sha256').update(normalized).digest('hex')
+  return contextScope ? `${hash}:${contextScope}` : hash
 }
 
 export class AnswerCache {
-  async get(questionText: string, questionType: string): Promise<string | null> {
+  async get(questionText: string, questionType: string, contextScope = ''): Promise<string | null> {
     const database = await getDb()
-    const hash = hashQuestion(questionText)
+    const hash = hashQuestion(questionText, contextScope)
     const result = database.exec(
       'SELECT answer_text FROM answers WHERE hash = ? AND question_type = ?',
       [hash, questionType]
@@ -129,9 +143,9 @@ export class AnswerCache {
     return (result[0]?.values?.[0]?.[0] as string) ?? null
   }
 
-  async set(questionText: string, questionType: string, answerText: string): Promise<void> {
+  async set(questionText: string, questionType: string, answerText: string, contextScope = ''): Promise<void> {
     const database = await getDb()
-    const hash = hashQuestion(questionText)
+    const hash = hashQuestion(questionText, contextScope)
     database.run(
       'INSERT OR REPLACE INTO answers (hash, question_type, question_text, answer_text, created_at) VALUES (?, ?, ?, ?, ?)',
       [hash, questionType, questionText.substring(0, 500), answerText, Date.now()]

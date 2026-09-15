@@ -2,11 +2,15 @@ import { useState } from 'react'
 import type { SessionConfig } from './SetupWizard'
 import { loadSettings } from './Settings'
 import WindowControls from './WindowControls'
+import ProjectSelector from './ProjectSelector'
 
 interface Props {
   onCreateSession: (config: SessionConfig) => void
   onBack: () => void
   onDock: () => void
+  projects?: ProjectSummary[]
+  initialProjectId?: string
+  onManageProjects?: () => void
 }
 
 const ROLE_PRESETS = [
@@ -24,11 +28,12 @@ const MEETING_TYPES = [
   { id: 'general' as const, label: 'General meeting', desc: 'Team discussions, planning, and ad-hoc questions' },
 ]
 
-export default function MeetingAssistSetup({ onCreateSession, onBack, onDock }: Props) {
+export default function MeetingAssistSetup({ onCreateSession, onBack, onDock, projects = [], initialProjectId = '', onManageProjects }: Props) {
   const [meetingType, setMeetingType] = useState<'standup' | 'general'>('standup')
   const [role, setRole] = useState('')
   const [teamContext, setTeamContext] = useState('')
   const [notes, setNotes] = useState('')
+  const [projectId, setProjectId] = useState(initialProjectId)
   const [error, setError] = useState('')
 
   const handleStart = () => {
@@ -57,6 +62,7 @@ export default function MeetingAssistSetup({ onCreateSession, onBack, onDock }: 
       extraContext: meetingContext,
       autoGenerate: false,
       aiModel: loadSettings().aiModel || 'claude-sonnet-4-6',
+      projectId: projectId || undefined,
     })
   }
 
@@ -148,6 +154,8 @@ export default function MeetingAssistSetup({ onCreateSession, onBack, onDock }: 
             rows={3}
           />
         </div>
+
+        <ProjectSelector projects={projects} value={projectId} onChange={setProjectId} onManageProjects={onManageProjects} />
 
         {error && <div className="mock-error">{error}</div>}
       </div>

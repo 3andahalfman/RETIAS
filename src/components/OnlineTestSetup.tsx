@@ -14,12 +14,16 @@ import {
 } from './OnlineTestIcons'
 
 import ProjectInstructionsFields from './ProjectInstructionsFields'
+import ProjectSelector from './ProjectSelector'
 import { PROJECT_ONBOARDING_TYPE } from '../lib/project-onboarding'
 
 interface Props {
-  onStart: (testType: string, extraContext?: string) => void
+  onStart: (testType: string, extraContext?: string, projectId?: string) => void
   onBack: () => void
   onDock: () => void
+  projects?: ProjectSummary[]
+  initialProjectId?: string
+  onManageProjects?: () => void
 }
 
 const TEST_TYPES: {
@@ -73,9 +77,10 @@ const TEST_TYPES: {
   },
 ]
 
-export default function OnlineTestSetup({ onStart, onBack, onDock }: Props) {
+export default function OnlineTestSetup({ onStart, onBack, onDock, projects = [], initialProjectId = '', onManageProjects }: Props) {
   const [selected, setSelected] = useState<string | null>(null)
   const [instructions, setInstructions] = useState('')
+  const [projectId, setProjectId] = useState(initialProjectId)
 
   const handleSelect = (id: string) => {
     setSelected(id)
@@ -101,6 +106,14 @@ export default function OnlineTestSetup({ onStart, onBack, onDock }: Props) {
       />
 
       <div className="online-test-body">
+        <ProjectSelector
+          projects={projects}
+          value={projectId}
+          onChange={setProjectId}
+          onManageProjects={onManageProjects}
+          hint="Optional — attach saved instructions and reference files for any assessment type."
+        />
+
         <div className="online-test-section-label">Assessment Types</div>
         <div className="online-test-grid">
           {TEST_TYPES.map(({ id, label, desc, accent, Icon }) => (
@@ -137,7 +150,7 @@ export default function OnlineTestSetup({ onStart, onBack, onDock }: Props) {
           onClick={() => {
             if (!selected) return
             const extra = selected === PROJECT_ONBOARDING_TYPE ? instructions.trim() : undefined
-            onStart(selected, extra || undefined)
+            onStart(selected, extra || undefined, projectId || undefined)
           }}
         >
           Start Assessment →

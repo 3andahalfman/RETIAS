@@ -2,21 +2,26 @@ import { useRef, useState } from 'react'
 import type { SessionConfig } from './SetupWizard'
 import { loadSettings } from './Settings'
 import WindowControls from './WindowControls'
+import ProjectSelector from './ProjectSelector'
 
 interface Props {
   onCreateSession: (config: SessionConfig) => void
   onBack: () => void
   onDock: () => void
   cvs?: CV[]
+  projects?: ProjectSummary[]
+  initialProjectId?: string
+  onManageProjects?: () => void
 }
 
-export default function MockInterviewSetup({ onCreateSession, onBack, onDock, cvs = [] }: Props) {
+export default function MockInterviewSetup({ onCreateSession, onBack, onDock, cvs = [], projects = [], initialProjectId = '', onManageProjects }: Props) {
   const [resumeText, setResumeText] = useState('')
   const [resumeFileName, setResumeFileName] = useState('')
   const [generatedJD, setGeneratedJD] = useState('')
   const [editableJD, setEditableJD] = useState('')
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState('')
+  const [projectId, setProjectId] = useState(initialProjectId)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -77,6 +82,7 @@ export default function MockInterviewSetup({ onCreateSession, onBack, onDock, cv
       extraContext: 'This is a mock interview. Answer confidently and concisely.',
       autoGenerate: true,
       aiModel: loadSettings().aiModel || 'claude-sonnet-4-6',
+      projectId: projectId || undefined,
     })
   }
 
@@ -203,10 +209,28 @@ export default function MockInterviewSetup({ onCreateSession, onBack, onDock, cv
           </div>
         </div>
 
-        {/* Step 3 — Generated JD preview (shown after generation) */}
+        {/* Step 3 — Project context */}
+        <div className="mock-step-card">
+          <div className="mock-step-num">3</div>
+          <div className="mock-step-body">
+            <div className="mock-step-title">Attach a project (optional)</div>
+            <div className="mock-step-desc">
+              Ground the AI in your own instructions and reference files.
+            </div>
+            <ProjectSelector
+              projects={projects}
+              value={projectId}
+              onChange={setProjectId}
+              onManageProjects={onManageProjects}
+              label="📁 Project"
+            />
+          </div>
+        </div>
+
+        {/* Step 4 — Generated JD preview (shown after generation) */}
         {generatedJD && (
           <div className="mock-step-card">
-            <div className="mock-step-num">3</div>
+            <div className="mock-step-num">4</div>
             <div className="mock-step-body">
               <div className="mock-step-title">Review generated job description</div>
               <div className="mock-step-desc">
