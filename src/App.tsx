@@ -16,7 +16,7 @@ import Sidebar, { type SidebarItemId } from './components/Sidebar'
 import TranscriptPanel from './components/Transcript'
 import AnswerPanel from './components/AnswerPanel'
 import AudioCapture from './components/AudioCapture'
-import ManualPromptBar from './components/ManualPromptBar'
+import ChatPanel from './components/ChatPanel'
 import CvManager from './components/CvManager'
 import ProjectManager, { type ProjectSessionTarget } from './components/ProjectManager'
 import Settings, { loadSettings } from './components/Settings'
@@ -28,6 +28,7 @@ import { getMeetingTypeLabel } from './lib/meeting-types'
 import { invalidateSupabaseSessionSync } from './lib/supabase'
 import PricingPage from './components/PricingPage'
 import AutoTyper from './components/AutoTyper'
+import { initNotificationListeners, syncUpdateDownloadState } from './lib/notification-store'
 import './index.css'
 
 type View = 'dashboard' | 'setup' | 'mock-interview' | 'meeting-setup' | 'past-sessions' | 'session' | 'online-test' | 'solve-test' | 'cv-manager' | 'projects' | 'auto-typer' | 'settings' | 'pricing'
@@ -74,6 +75,19 @@ export default function App() {
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
   }, [])
+
+  // Attach update listeners and sync main-process state after the gate clears.
+  useEffect(() => {
+    if (!updateGatePassed) return
+    initNotificationListeners()
+    window.electronAPI?.getUpdateCheckStatus?.()
+      .then((result) => {
+        if (result?.status === 'available' || result?.downloadPhase) {
+          syncUpdateDownloadState(result)
+        }
+      })
+      .catch(() => {})
+  }, [updateGatePassed])
 
   // Restore session after startup update gate clears
   useEffect(() => {
@@ -304,7 +318,7 @@ export default function App() {
   }
 
   // Docked non-session views
-  if (isDocked && (view === 'setup' || view === 'dashboard' || view === 'mock-interview' || view === 'meeting-setup' || view === 'online-test' || view === 'solve-test' || view === 'past-sessions' || view === 'cv-manager' || view === 'auto-typer' || view === 'settings' || view === 'pricing')) {
+  if (isDocked && (view === 'setup' || view === 'dashboard' || view === 'mock-interview' || view === 'meeting-setup' || view === 'online-test' || view === 'solve-test' || view === 'past-sessions' || view === 'cv-manager' || view === 'projects' || view === 'auto-typer' || view === 'settings' || view === 'pricing')) {
     return (
       <div className="app-root docked">
         <div
@@ -643,7 +657,7 @@ export default function App() {
           />
         </div>
 
-        <ManualPromptBar
+        <ChatPanel
           sessionActive={sessionActive}
           isPremium={user?.is_premium ?? false}
         />

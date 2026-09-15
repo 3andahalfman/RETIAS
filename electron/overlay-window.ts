@@ -7,14 +7,15 @@ const isDev = process.env.NODE_ENV === 'development'
 export function createOverlayWindow(): BrowserWindow {
   const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize
 
-  const winW = 1100
-  const winH = 750
+  const winW = 1280
+  const winH = 800
 
   const overlay = new BrowserWindow({
     width: winW,
     height: winH,
     x: Math.round((screenW - winW) / 2),
     y: 30,
+    title: 'RETIAS',
     icon: loadAppIcon(),
     transparent: true,
     alwaysOnTop: true,

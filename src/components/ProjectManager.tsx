@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import DockIcon from './DockIcon'
 import CreateProjectModal, { type PendingProjectFile } from './CreateProjectModal'
 
@@ -30,6 +30,14 @@ export default function ProjectManager({ projects, onProjectsChange, onStartSess
   const [listError, setListError] = useState('')
   const [snapOpen, setSnapOpen] = useState(false)
   const snapRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (snapRef.current && !snapRef.current.contains(e.target as Node)) setSnapOpen(false)
+    }
+    if (snapOpen) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [snapOpen])
 
   const openCreate = () => {
     setListError('')
@@ -126,6 +134,20 @@ export default function ProjectManager({ projects, onProjectsChange, onStartSess
                 <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
               </svg>
             </button>
+            {snapOpen && (
+              <div className="snap-grid-dropdown">
+                <div className="snap-grid-row">
+                  <button type="button" className="snap-grid-cell" title="Top Left"    onClick={() => { window.electronAPI?.snapWindow('tl'); setSnapOpen(false) }} />
+                  <button type="button" className="snap-grid-cell" title="Top Middle"  onClick={() => { window.electronAPI?.snapWindow('tm'); setSnapOpen(false) }} />
+                  <button type="button" className="snap-grid-cell" title="Top Right"   onClick={() => { window.electronAPI?.snapWindow('tr'); setSnapOpen(false) }} />
+                </div>
+                <div className="snap-grid-row">
+                  <button type="button" className="snap-grid-cell" title="Bottom Left"   onClick={() => { window.electronAPI?.snapWindow('bl'); setSnapOpen(false) }} />
+                  <button type="button" className="snap-grid-cell" title="Bottom Middle" onClick={() => { window.electronAPI?.snapWindow('bm'); setSnapOpen(false) }} />
+                  <button type="button" className="snap-grid-cell" title="Bottom Right"  onClick={() => { window.electronAPI?.snapWindow('br'); setSnapOpen(false) }} />
+                </div>
+              </div>
+            )}
           </div>
           <button type="button" className="dash-wc-btn dash-wc-dock" title="Dock" onClick={onDock}>
             <DockIcon />

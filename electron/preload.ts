@@ -23,6 +23,7 @@ function createIpcFanout(channel: string) {
 }
 
 const llmDoneFanout = createIpcFanout('llm:done')
+const chatDoneFanout = createIpcFanout('chat:done')
 const updateAvailableFanout = createIpcFanout('update:available')
 const updateProgressFanout = createIpcFanout('update:progress')
 const updateDownloadedFanout = createIpcFanout('update:downloaded')
@@ -52,6 +53,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('llm:token', (_e, token) => cb(token))
   },
   onAnswerDone: (cb: () => void) => llmDoneFanout.subscribe(cb),
+  onChatToken: (cb: (token: string) => void) => {
+    ipcRenderer.removeAllListeners('chat:token')
+    ipcRenderer.on('chat:token', (_e, token) => cb(token))
+  },
+  onChatDone: (cb: () => void) => chatDoneFanout.subscribe(cb),
   onQuestionDetected: (cb: (question: string, type: string) => void) => {
     ipcRenderer.removeAllListeners('question:detected')
     ipcRenderer.on('question:detected', (_e, question, type) => cb(question, type))
@@ -116,6 +122,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeAllListeners: (channel: string) => {
     if (channel === 'llm:done') {
       llmDoneFanout.clear()
+      return
+    }
+    if (channel === 'chat:done') {
+      chatDoneFanout.clear()
       return
     }
     ipcRenderer.removeAllListeners(channel)

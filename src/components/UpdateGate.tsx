@@ -77,7 +77,10 @@ export default function UpdateGate({ onPassed }: UpdateGateProps) {
       return
     }
 
-    api.getUpdateCheckStatus().then(applyCheckResult).catch(() => onPassed())
+    // Do not fail-open on invoke errors — main re-pushes status on did-finish-load.
+    api.getUpdateCheckStatus().then(applyCheckResult).catch((err) => {
+      console.warn('[UpdateGate] getUpdateCheckStatus failed — waiting for push:', err)
+    })
 
     const unsub = api.onUpdateCheckStatus?.(applyCheckResult)
     return () => unsub?.()

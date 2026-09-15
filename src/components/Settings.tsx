@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { isAdminEmail } from '../lib/admin'
 import { hasPremiumPlusAccess } from '../lib/premium-access'
+import { syncUpdateDownloadState } from '../lib/notification-store'
 import DockIcon from './DockIcon'
 
 interface Props {
@@ -146,6 +147,8 @@ export default function Settings({ user, onLogout, onUserUpdate, onUpgrade }: Pr
   const [clearDone, setClearDone] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [snapOpen, setSnapOpen] = useState(false)
+  const [updateCheckMessage, setUpdateCheckMessage] = useState<string | null>(null)
+  const [checkingUpdates, setCheckingUpdates] = useState(false)
   const snapRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -162,6 +165,33 @@ export default function Settings({ user, onLogout, onUserUpdate, onUpgrade }: Pr
     if (snapOpen) document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [snapOpen])
+
+  async function handleCheckForUpdates() {
+    const api = window.electronAPI
+    if (!api?.retryUpdateCheck) {
+      setUpdateCheckMessage('Update checks are only available in the installed app.')
+      return
+    }
+    setCheckingUpdates(true)
+    setUpdateCheckMessage(null)
+    try {
+      const result = await api.retryUpdateCheck()
+      syncUpdateDownloadState(result)
+      if (result.status === 'available') {
+        setUpdateCheckMessage(`Version ${result.version ?? 'new'} is available. See the update banner.`)
+      } else if (result.status === 'up-to-date') {
+        setUpdateCheckMessage('You are on the latest version.')
+      } else if (result.status === 'error') {
+        setUpdateCheckMessage('Could not reach the update server. Try again later.')
+      } else {
+        setUpdateCheckMessage('Update check skipped in development.')
+      }
+    } catch {
+      setUpdateCheckMessage('Update check failed. Try again later.')
+    } finally {
+      setCheckingUpdates(false)
+    }
+  }
 
   function update<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
     setSettings(prev => {
@@ -707,9 +737,17 @@ export default function Settings({ user, onLogout, onUserUpdate, onUpgrade }: Pr
             </div>
 
             <div className="settings-group">
-              <button type="button" className="settings-btn-secondary" onClick={() => window.electronAPI?.downloadUpdate?.()}>
-                Check for Updates
+              <button
+                type="button"
+                className="settings-btn-secondary"
+                onClick={handleCheckForUpdates}
+                disabled={checkingUpdates}
+              >
+                {checkingUpdates ? 'Checking…' : 'Check for Updates'}
               </button>
+              {updateCheckMessage && (
+                <p className="settings-hint" style={{ marginTop: 8 }}>{updateCheckMessage}</p>
+              )}
             </div>
           </div>
         )}

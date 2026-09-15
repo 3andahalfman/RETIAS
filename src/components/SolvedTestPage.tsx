@@ -5,7 +5,7 @@ import Toolbar from './Toolbar'
 import TranscriptPanel from './Transcript'
 import AnswerPanel from './AnswerPanel'
 import AudioCapture from './AudioCapture'
-import ManualPromptBar from './ManualPromptBar'
+import ChatPanel from './ChatPanel'
 import { loadSettings } from './Settings'
 import { AutoTypeHeaderButton, AutoTypeStatusStrip } from './InlineAutoTyper'
 import { hasPremiumPlusAccess } from '../lib/premium-access'
@@ -430,7 +430,7 @@ export default function SolvedTestPage({ user, onBack, onDock }: Props) {
             )}
           </div>
 
-          <ManualPromptBar
+          <ChatPanel
             sessionActive={liveActive}
             isPremium={user.is_premium}
             browseMode={!liveActive}

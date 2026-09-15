@@ -67,6 +67,19 @@ export class IpcBus extends EventEmitter {
       }
     })
 
+    // Chat thread — manual prompts only (does not hijack AnswerPanel)
+    this.on('chat:token', (token: string) => {
+      if (this.overlayWindow && !this.overlayWindow.isDestroyed()) {
+        this.overlayWindow.webContents.send('chat:token', token)
+      }
+    })
+
+    this.on('chat:done', () => {
+      if (this.overlayWindow && !this.overlayWindow.isDestroyed()) {
+        this.overlayWindow.webContents.send('chat:done')
+      }
+    })
+
     // Detected question → overlay (auto-shows it)
     this.on('question:detected', (question: string, type: string) => {
       if (this.overlayWindow && !this.overlayWindow.isDestroyed()) {

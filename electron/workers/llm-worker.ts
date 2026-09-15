@@ -3,6 +3,12 @@ import OpenAI from 'openai'
 import { IpcBus } from '../ipc-bus.js'
 import { AnswerCache, contextScopeHash } from '../lib/cache.js'
 import { appendProjectContext } from '../lib/project-context.js'
+import {
+  CHAT_TOOLS_INSTRUCTION,
+  executeChatTool,
+  getAnthropicChatTools,
+  getOpenAIChatTools,
+} from '../lib/chat-tools.js'
 
 /**
  * LLM Worker — Phase 6
@@ -438,6 +444,7 @@ export class LLMWorker {
   // Session memory — accumulated across all screen analyses and manual prompts
   private conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = []
   private readonly MAX_HISTORY = 20 // 10 turns
+  private chatRequestId = 0
 
   // Stored handler references for proper cleanup
   private contextHandler: ((systemPrompt: string, userMessage: string, questionText: string, questionType: string) => void) | null = null
@@ -535,6 +542,36 @@ export class LLMWorker {
     this.ipcBus.on('session:extra-context', this.extraContextHandler)
   }
 
+  /** Append a user/assistant turn for follow-up chat context (capped at MAX_HISTORY). */
+  private appendConversationTurn(userContent: string, assistantContent: string) {
+    const user = userContent.trim()
+    const assistant = assistantContent.trim()
+    if (!user || !assistant) return
+    this.conversationHistory.push({ role: 'user', content: user })
+    this.conversationHistory.push({ role: 'assistant', content: assistant })
+    if (this.conversationHistory.length > this.MAX_HISTORY) {
+      this.conversationHistory = this.conversationHistory.slice(-this.MAX_HISTORY)
+    }
+  }
+
+  /** On regenerate, replace the last turn when it matches the same question. */
+  private recordAnswerInHistory(question: string, answer: string, replaceLast = false) {
+    if (!answer.trim()) return
+    if (replaceLast) {
+      const len = this.conversationHistory.length
+      if (
+        len >= 2
+        && this.conversationHistory[len - 2].role === 'user'
+        && this.conversationHistory[len - 2].content === question
+        && this.conversationHistory[len - 1].role === 'assistant'
+      ) {
+        this.conversationHistory[len - 1].content = answer
+        return
+      }
+    }
+    this.appendConversationTurn(question, answer)
+  }
+
   /** Abort the active stream if one is running, returns true if aborted */
   private abortCurrent(): boolean {
     if (this.isGenerating) {
@@ -629,6 +666,7 @@ export class LLMWorker {
       if (fullResponse) {
         await this.cache.set(questionText, questionType, fullResponse, contextScope)
         this.ipcBus.emit('answer:complete', questionText, questionType, fullResponse)
+        this.recordAnswerInHistory(questionText, fullResponse, skipCache)
       }
     } catch (err: any) {
       // If aborted (for a refresh), silently discard — new generation will follow
@@ -721,6 +759,10 @@ export class LLMWorker {
 
       if (fullResponse) {
         await this.cache.set('Screen_' + Date.now(), questionType, fullResponse)
+        this.appendConversationTurn(
+          '[Screen Analysis] Solve every question visible on this screen.',
+          fullResponse,
+        )
       }
     } catch (err: any) {
       const isAbort = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort') || err?.code === 'ERR_CANCELED'
@@ -793,6 +835,10 @@ export class LLMWorker {
       this.ipcBus.emit('llm:done')
       if (fullResponse) {
         await this.cache.set('ScreenMulti_' + Date.now(), 'general', fullResponse)
+        this.appendConversationTurn(
+          `[Screen Analysis (${images.length} screenshot${images.length === 1 ? '' : 's'})] Solve every question visible.`,
+          fullResponse,
+        )
 
         if (this.sessionTestType && this.sessionUserId && this.sessionUserEmail) {
           const { storeOnlineTestCapture } = await import('../lib/screenshot-store.js')
@@ -820,11 +866,8 @@ export class LLMWorker {
     }
   }
 
-  private async answerManualPrompt(prompt: string) {
-    if (this.isGenerating) this.abortCurrent()
-
-    // Pick the best available system prompt for the current session context
-    const systemPrompt = this.lastContext?.systemPrompt
+  private buildChatSystemPrompt(): string {
+    const base = this.lastContext?.systemPrompt
       ?? (this.sessionTestType ? buildScreenSystemPrompt(this.sessionTestType, this.sessionProjectContext, this.sessionExtraContext) : null)
       ?? this.sessionBaselinePrompt
       ?? appendProjectContext(
@@ -832,76 +875,216 @@ export class LLMWorker {
         this.sessionProjectContext,
         this.sessionExtraContext,
       )
+    return `${base}\n\n${CHAT_TOOLS_INSTRUCTION}`
+  }
 
-    const shortTitle = prompt.length > 60 ? prompt.slice(0, 57) + '…' : prompt
-    const cardType = this.sessionTestType ?? 'manual'
-    this.ipcBus.emit('screen:card', shortTitle, cardType)
+  private emitChatText(text: string, sink: { full: string }, requestId: number) {
+    if (!text || requestId !== this.chatRequestId) return
+    sink.full += text
+    this.ipcBus.emit('chat:token', text)
+  }
+
+  private withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
+      promise.then(
+        (value) => { clearTimeout(timer); resolve(value) },
+        (err) => { clearTimeout(timer); reject(err) },
+      )
+    })
+  }
+
+  private async runChatWithClaudeTools(
+    systemPrompt: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    messages: any[],
+    sink: { full: string },
+    requestId: number,
+  ) {
+    const tools = getAnthropicChatTools()
+    const maxRounds = 6
+
+    for (let round = 0; round < maxRounds; round++) {
+      console.log(`[LLMWorker] Chat tool round ${round + 1}/${maxRounds}`)
+      const response = await this.withTimeout(
+        this.anthropic.messages.create({
+          model: this.activeModel,
+          max_tokens: 4096,
+          system: systemPrompt,
+          tools,
+          messages,
+        }),
+        120_000,
+        'Chat request',
+      )
+
+      if (requestId !== this.chatRequestId) return
+
+      const toolUses: Array<{ id: string; name: string; input: Record<string, unknown> }> = []
+      for (const block of response.content) {
+        if (block.type === 'text') {
+          this.emitChatText(block.text, sink, requestId)
+        } else if (block.type === 'tool_use') {
+          toolUses.push({ id: block.id, name: block.name, input: block.input as Record<string, unknown> })
+        }
+      }
+
+      if (response.stop_reason !== 'tool_use' || toolUses.length === 0) break
+
+      this.emitChatText('\n\n*Creating visual…*\n\n', sink, requestId)
+
+      messages.push({ role: 'assistant', content: response.content })
+
+      const toolResults = toolUses.map((tu) => {
+        try {
+          const result = executeChatTool(tu.name, tu.input)
+          this.emitChatText(result.markdown + '\n\n', sink, requestId)
+          return {
+            type: 'tool_result' as const,
+            tool_use_id: tu.id,
+            content: result.contentForModel,
+          }
+        } catch (err: any) {
+          const msg = err?.message ?? String(err)
+          this.emitChatText(`⚠️ Could not render visual (${tu.name}): ${msg}\n\n`, sink, requestId)
+          return {
+            type: 'tool_result' as const,
+            tool_use_id: tu.id,
+            content: `Tool error: ${msg}`,
+            is_error: true,
+          }
+        }
+      })
+
+      messages.push({ role: 'user', content: toolResults })
+    }
+  }
+
+  private async runChatWithOpenAITools(
+    systemPrompt: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    messages: any[],
+    sink: { full: string },
+    requestId: number,
+  ) {
+    const tools = getOpenAIChatTools()
+    const maxRounds = 6
+
+    for (let round = 0; round < maxRounds; round++) {
+      console.log(`[LLMWorker] Chat tool round ${round + 1}/${maxRounds}`)
+      const response = await this.withTimeout(
+        this.openai.chat.completions.create({
+          model: this.activeModel,
+          max_tokens: 4096,
+          messages,
+          tools,
+          tool_choice: 'auto',
+        }, { signal: this.abortController?.signal }),
+        120_000,
+        'Chat request',
+      )
+
+      if (requestId !== this.chatRequestId) return
+
+      const choice = response.choices[0]?.message
+      if (!choice) break
+
+      if (choice.content) {
+        this.emitChatText(choice.content, sink, requestId)
+      }
+
+      const toolCalls = choice.tool_calls ?? []
+      if (!toolCalls.length) break
+
+      this.emitChatText('\n\n*Creating visual…*\n\n', sink, requestId)
+      messages.push(choice)
+
+      for (const tc of toolCalls) {
+        if (tc.type !== 'function') continue
+        let parsed: Record<string, unknown> = {}
+        try {
+          parsed = JSON.parse(tc.function.arguments || '{}')
+        } catch {
+          parsed = {}
+        }
+        try {
+          const result = executeChatTool(tc.function.name, parsed)
+          this.emitChatText(result.markdown + '\n\n', sink, requestId)
+          messages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            content: result.contentForModel,
+          })
+        } catch (err: any) {
+          const msg = err?.message ?? String(err)
+          this.emitChatText(`⚠️ Could not render visual (${tc.function.name}): ${msg}\n\n`, sink, requestId)
+          messages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            content: `Tool error: ${msg}`,
+          })
+        }
+      }
+    }
+  }
+
+  private async answerManualPrompt(prompt: string) {
+    if (this.isGenerating) this.abortCurrent()
+
+    const systemPrompt = this.buildChatSystemPrompt()
+    const requestId = ++this.chatRequestId
 
     this.isGenerating = true
-    let fullResponse = ''
+    const sink = { full: '' }
     try {
-      // Build messages with full session history so the AI knows what's been asked before
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const messages: any[] = [
-        ...this.conversationHistory,
-        { role: 'user', content: prompt },
-      ]
-
-      console.log(`[LLMWorker] Manual prompt (model: ${this.activeModel}, history: ${this.conversationHistory.length} msgs):`, prompt.slice(0, 80))
+      console.log(`[LLMWorker] Chat prompt (model: ${this.activeModel}, history: ${this.conversationHistory.length} msgs):`, prompt.slice(0, 80))
+      this.emitChatText('*Thinking…*\n\n', sink, requestId)
 
       if (isOpenAIModel(this.activeModel)) {
         this.abortController = new AbortController()
-        const openaiMessages: any[] = [
-          { role: 'system' as const, content: systemPrompt },
+        const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+          { role: 'system', content: systemPrompt },
           ...this.conversationHistory.map(m => ({ role: m.role, content: m.content })),
-          { role: 'user' as const, content: prompt },
+          { role: 'user', content: prompt },
         ]
-        const stream = await this.openai.chat.completions.create({
-          model: this.activeModel,
-          max_tokens: 2048,
-          stream: true,
-          messages: openaiMessages,
-        }, { signal: this.abortController.signal })
-        for await (const chunk of stream) {
-          const token = chunk.choices[0]?.delta?.content ?? ''
-          if (token) { fullResponse += token; this.ipcBus.emit('llm:token', token) }
-        }
+        await this.runChatWithOpenAITools(systemPrompt, openaiMessages, sink, requestId)
       } else {
-        const stream = this.anthropic.messages.stream({
-          model: this.activeModel,
-          max_tokens: 2048,
-          system: systemPrompt,
-          messages,
-        })
-        this.currentStream = stream
-        for await (const event of stream) {
-          if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-            fullResponse += event.delta.text
-            this.ipcBus.emit('llm:token', event.delta.text)
-          }
-        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const messages: any[] = [
+          ...this.conversationHistory,
+          { role: 'user', content: prompt },
+        ]
+        await this.runChatWithClaudeTools(systemPrompt, messages, sink, requestId)
       }
 
-      this.ipcBus.emit('llm:done')
-      if (fullResponse) {
-        this.conversationHistory.push({ role: 'user', content: prompt })
-        this.conversationHistory.push({ role: 'assistant', content: fullResponse })
-        if (this.conversationHistory.length > this.MAX_HISTORY) {
-          this.conversationHistory = this.conversationHistory.slice(-this.MAX_HISTORY)
-        }
-        await this.cache.set('Manual_' + Date.now(), 'manual', fullResponse)
+      if (requestId !== this.chatRequestId) return
+
+      if (!sink.full.trim()) {
+        const fallback = '⚠️ No response was generated. Try rephrasing your question or ask for a simpler chart.'
+        sink.full = fallback
+        this.ipcBus.emit('chat:token', fallback)
       }
+
+      console.log(`[LLMWorker] Chat complete (${sink.full.length} chars)`)
+      this.ipcBus.emit('chat:done')
+      this.appendConversationTurn(prompt, sink.full)
+      await this.cache.set('Manual_' + Date.now(), 'manual', sink.full)
     } catch (err: any) {
+      if (requestId !== this.chatRequestId) return
       const isAbort = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort') || err?.code === 'ERR_CANCELED'
-      if (!isAbort) {
-        console.error('[LLMWorker] Manual prompt error:', err?.message)
-        this.ipcBus.emit('llm:token', '\n\n⚠️ Failed to get a response. Please try again.')
-        this.ipcBus.emit('llm:done')
+      if (isAbort) {
+        this.ipcBus.emit('chat:done')
+      } else {
+        console.error('[LLMWorker] Manual prompt error:', err?.message ?? err)
+        this.ipcBus.emit('chat:token', `\n\n⚠️ ${err?.message ?? 'Failed to get a response. Please try again.'}`)
+        this.ipcBus.emit('chat:done')
       }
     } finally {
-      this.currentStream = null
-      this.abortController = null
-      this.isGenerating = false
+      if (requestId === this.chatRequestId) {
+        this.currentStream = null
+        this.abortController = null
+        this.isGenerating = false
+      }
     }
   }
 

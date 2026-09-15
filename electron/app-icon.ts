@@ -4,14 +4,18 @@ import { join } from 'node:path'
 
 /** Resolve best icon path for dev/taskbar (packaged Windows uses embedded exe icon). */
 export function resolveAppIconPath(): string | null {
+  const appRoot = app.isReady() ? app.getAppPath() : join(__dirname, '../..')
   const candidates =
     process.platform === 'win32'
       ? [
+          join(appRoot, 'build/icon.ico'),
           join(__dirname, '../../build/icon.ico'),
+          join(appRoot, 'public/logo.png'),
           join(__dirname, '../../public/logo.png'),
           join(__dirname, '../renderer/logo.png'),
         ]
       : [
+          join(appRoot, 'public/logo.png'),
           join(__dirname, '../../public/logo.png'),
           join(__dirname, '../renderer/logo.png'),
         ]

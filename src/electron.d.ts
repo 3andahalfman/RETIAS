@@ -130,6 +130,8 @@ interface ElectronAPI {
   // Answer streaming
   onToken: (cb: (token: string) => void) => void
   onAnswerDone: (cb: () => void) => () => void
+  onChatToken: (cb: (token: string) => void) => void
+  onChatDone: (cb: () => void) => () => void
   onQuestionDetected: (cb: (question: string, type: string) => void) => void
   onQuestionUpdate: (cb: (question: string, type: string) => void) => void
   onConvState: (cb: (state: string) => void) => void

@@ -131,9 +131,20 @@ function setUpdateCheckStatus(status: UpdateCheckStatus, version?: string | null
   updateCheckStatus = status
   if (version !== undefined) updateAvailableVersion = version
   sendUpdateCheckStatus()
+  // Belt-and-suspenders: startup check sets status via IPC; also emit the event
+  // so notification-store syncs even if this fired before renderer listeners attach.
+  if (status === 'available' && updateAvailableVersion && overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.webContents.send('update:available', updateAvailableVersion)
+  }
 }
 
-function waitForUpdateCheckResult(): Promise<{ available: boolean; version?: string }> {
+type UpdateCheckOutcome =
+  | { available: true; version?: string }
+  | { available: false }
+  | { available: false; failed: true }
+  | { available: false; timedOut: true }
+
+function waitForUpdateCheckResult(): Promise<UpdateCheckOutcome> {
   return new Promise((resolve) => {
     const cleanup = () => {
       autoUpdater.removeListener('update-available', onAvailable)
@@ -142,16 +153,21 @@ function waitForUpdateCheckResult(): Promise<{ available: boolean; version?: str
     }
     const onAvailable = (info: { version?: string }) => {
       cleanup()
+      logger.log('[Updater] Update available:', info.version ?? 'unknown')
+      console.log('[Updater] Update available:', info.version ?? 'unknown')
       resolve({ available: true, version: info.version })
     }
     const onNotAvailable = () => {
       cleanup()
+      logger.log('[Updater] App is up to date (', app.getVersion(), ')')
+      console.log('[Updater] App is up to date:', app.getVersion())
       resolve({ available: false })
     }
     const onError = (err: Error) => {
       cleanup()
       logger.warn('[Updater] Check error:', err.message)
-      resolve({ available: false })
+      console.warn('[Updater] Check error:', err.message, err.stack)
+      resolve({ available: false, failed: true })
     }
 
     autoUpdater.once('update-available', onAvailable)
@@ -161,7 +177,8 @@ function waitForUpdateCheckResult(): Promise<{ available: boolean; version?: str
     autoUpdater.checkForUpdates().catch((err: Error) => {
       cleanup()
       logger.warn('[Updater] checkForUpdates rejected:', err.message)
-      resolve({ available: false })
+      console.warn('[Updater] checkForUpdates rejected:', err.message, err.stack)
+      resolve({ available: false, failed: true })
     })
   })
 }
@@ -185,17 +202,25 @@ async function runStartupUpdateCheck(force = false): Promise<void> {
 
   startupUpdateCheckPromise = (async () => {
     setUpdateCheckStatus('checking')
+    logger.log('[Updater] Startup check starting (current:', app.getVersion(), ')')
+    console.log('[Updater] Startup check starting — current version:', app.getVersion())
 
     try {
       const outcome = await Promise.race([
         waitForUpdateCheckResult(),
-        new Promise<{ available: false; timedOut: true }>((resolve) =>
+        new Promise<UpdateCheckOutcome>((resolve) =>
           setTimeout(() => resolve({ available: false, timedOut: true }), UPDATE_CHECK_TIMEOUT_MS),
         ),
       ])
 
       if ('timedOut' in outcome && outcome.timedOut) {
-        logger.warn('[Updater] Startup check timed out — fail open')
+        logger.warn('[Updater] Startup check timed out after', UPDATE_CHECK_TIMEOUT_MS, 'ms')
+        console.warn('[Updater] Startup check timed out')
+        setUpdateCheckStatus('error')
+        return
+      }
+
+      if ('failed' in outcome && outcome.failed) {
         setUpdateCheckStatus('error')
         return
       }
@@ -208,6 +233,7 @@ async function runStartupUpdateCheck(force = false): Promise<void> {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       logger.warn('[Updater] Startup check failed:', msg)
+      console.warn('[Updater] Startup check failed:', msg)
       setUpdateCheckStatus('error')
     }
   })()
@@ -245,10 +271,88 @@ function setupAutoUpdater() {
     if (updateDownloadInProgress) updateDownloadInProgress = false
     updateDownloadPromise = null
     logger.warn('[Updater] Error:', err.message)
-    console.warn('[Updater] Error:', err.message)
+    console.warn('[Updater] Error:', err.message, err.stack)
     sendUpdateCheckStatus()
   })
 }
+
+/** Register before the overlay window loads so the renderer gate can invoke immediately. */
+function registerUpdaterIpc() {
+  ipcMain.handle('update:get-check-status', () => buildUpdateCheckResponse())
+
+  ipcMain.handle('update:retry-check', async () => {
+    if (updateDownloaded) return buildUpdateCheckResponse()
+    startupUpdateCheckPromise = null
+    await runStartupUpdateCheck(true)
+    return buildUpdateCheckResponse()
+  })
+
+  ipcMain.on('update:download', () => {
+    if (!app.isPackaged || updateDownloaded) return
+    // Single in-flight download per session — ignore duplicate IPC while active.
+    if (updateDownloadInProgress || updateDownloadPromise) return
+    updateDownloadInProgress = true
+    sendUpdateCheckStatus()
+    updateDownloadPromise = autoUpdater.downloadUpdate()
+      .then(() => {
+        // Promise resolution is the reliable signal on Windows NSIS; the event
+        // can lag or be missed while progress already shows 100%.
+        markUpdateDownloaded(updateAvailableVersion)
+      })
+      .catch((err: Error) => {
+        clearUpdateFinalizeTimer()
+        updateDownloadInProgress = false
+        updateDownloadPromise = null
+        logger.warn('[Updater] downloadUpdate failed:', err.message)
+        console.error('[Updater] downloadUpdate failed:', err)
+        sendUpdateCheckStatus()
+      })
+  })
+
+  ipcMain.handle('update:install', async () => {
+    const fail = (error: string) => {
+      logger.warn('[Updater] Install failed:', error)
+      console.warn('[Updater] Install failed:', error)
+      return { ok: false as const, error }
+    }
+
+    if (!app.isPackaged) {
+      return fail('Updates can only be installed in the packaged app.')
+    }
+
+    if (!updateDownloaded) {
+      if (updateDownloadPromise) {
+        try {
+          await updateDownloadPromise
+          markUpdateDownloaded(updateAvailableVersion)
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Download incomplete'
+          return fail(msg)
+        }
+      } else {
+        return fail('Update is not ready to install yet. Wait for the download to finish.')
+      }
+    }
+
+    logger.log('[Updater] quitAndInstall — version:', updateAvailableVersion ?? 'unknown')
+    console.log('[Updater] quitAndInstall starting')
+
+    try {
+      ipcBus?.stopSession()
+      // oneClick=false NSIS — run installer UI, then relaunch when done.
+      autoUpdater.quitAndInstall(false, true)
+      setTimeout(() => {
+        logger.warn('[Updater] quitAndInstall did not exit — forcing quit')
+        app.exit(0)
+      }, 4000)
+      return { ok: true as const }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Install failed'
+      return fail(msg)
+    }
+  })
+}
+
 let currentUserId: string | null = null
 let currentUserEmail: string | null = null
 let currentUserIsPremium = false
@@ -336,17 +440,26 @@ function requireString(val: unknown, field: string): string {
 // loopback audio callback even after setContentProtection(true) is active.
 let cachedScreenSource: any = null
 
-function applyAppBranding() {
+/** Must run before app.whenReady() so Windows picks up name/icon for task manager. */
+function applyEarlyAppBranding() {
   app.setName('RETIAS')
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.retias.app')
   }
+  if (process.platform === 'win32' || process.platform === 'linux') {
+    process.title = 'RETIAS'
+  }
+}
+
+function applyAppBranding() {
   const icon = loadAppIcon()
   if (!icon) return
   if (process.platform === 'darwin' && app.dock) {
     app.dock.setIcon(icon)
   }
 }
+
+applyEarlyAppBranding()
 
 async function bootstrap() {
   await app.whenReady()
@@ -402,6 +515,12 @@ async function bootstrap() {
     })
   })
 
+  // Updater IPC must be registered before the overlay window loads (UpdateGate invokes on first paint).
+  if (app.isPackaged) {
+    setupAutoUpdater()
+    registerUpdaterIpc()
+  }
+
   // Single overlay window — everything runs here
   overlayWindow = createOverlayWindow()
 
@@ -410,9 +529,7 @@ async function bootstrap() {
     sendUpdateCheckStatus()
   })
 
-  // Startup update check runs in parallel with first paint (packaged builds only).
   if (app.isPackaged) {
-    setupAutoUpdater()
     void runStartupUpdateCheck()
   } else {
     setUpdateCheckStatus('skipped')
@@ -1050,81 +1167,6 @@ async function bootstrap() {
     }
   })
 
-  // ── Auto-updater (IPC — gate check runs at window creation above) ───────────
-  ipcMain.handle('update:get-check-status', () => buildUpdateCheckResponse())
-
-  ipcMain.handle('update:retry-check', async () => {
-    if (updateDownloaded) return buildUpdateCheckResponse()
-    startupUpdateCheckPromise = null
-    await runStartupUpdateCheck(true)
-    return buildUpdateCheckResponse()
-  })
-
-  ipcMain.on('update:download', () => {
-    if (!app.isPackaged || updateDownloaded) return
-    // Single in-flight download per session — ignore duplicate IPC while active.
-    if (updateDownloadInProgress || updateDownloadPromise) return
-    updateDownloadInProgress = true
-    sendUpdateCheckStatus()
-    updateDownloadPromise = autoUpdater.downloadUpdate()
-      .then(() => {
-        // Promise resolution is the reliable signal on Windows NSIS; the event
-        // can lag or be missed while progress already shows 100%.
-        markUpdateDownloaded(updateAvailableVersion)
-      })
-      .catch((err: Error) => {
-        clearUpdateFinalizeTimer()
-        updateDownloadInProgress = false
-        updateDownloadPromise = null
-        logger.warn('[Updater] downloadUpdate failed:', err.message)
-        console.error('[Updater] downloadUpdate failed:', err)
-        sendUpdateCheckStatus()
-      })
-  })
-
-  ipcMain.handle('update:install', async () => {
-    const fail = (error: string) => {
-      logger.warn('[Updater] Install failed:', error)
-      console.warn('[Updater] Install failed:', error)
-      return { ok: false as const, error }
-    }
-
-    if (!app.isPackaged) {
-      return fail('Updates can only be installed in the packaged app.')
-    }
-
-    if (!updateDownloaded) {
-      if (updateDownloadPromise) {
-        try {
-          await updateDownloadPromise
-          markUpdateDownloaded(updateAvailableVersion)
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Download incomplete'
-          return fail(msg)
-        }
-      } else {
-        return fail('Update is not ready to install yet. Wait for the download to finish.')
-      }
-    }
-
-    logger.log('[Updater] quitAndInstall — version:', updateAvailableVersion ?? 'unknown')
-    console.log('[Updater] quitAndInstall starting')
-
-    try {
-      ipcBus?.stopSession()
-      // oneClick=false NSIS — run installer UI, then relaunch when done.
-      autoUpdater.quitAndInstall(false, true)
-      setTimeout(() => {
-        logger.warn('[Updater] quitAndInstall did not exit — forcing quit')
-        app.exit(0)
-      }, 4000)
-      return { ok: true as const }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Install failed'
-      return fail(msg)
-    }
-  })
-
   // Mock interview — generates a job description from the candidate's resume
   ipcMain.handle('generate-mock-jd', async (_event, resumeText: string) => {
     const { generateMockJobDescription } = await import('./lib/mock-jd-generator.js')
@@ -1265,7 +1307,7 @@ async function bootstrap() {
   })
 
   // Window control IPC
-  let preDockBounds = { width: 1100, height: 750, x: 0, y: 0 }
+  let preDockBounds = { width: 1280, height: 800, x: 0, y: 0 }
   ipcMain.on('window:dock', () => {
     if (overlayWindow) {
       preDockBounds = overlayWindow.getBounds()
